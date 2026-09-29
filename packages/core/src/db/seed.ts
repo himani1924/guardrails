@@ -58,6 +58,25 @@ const AUDIENCE_SEGMENTS: readonly Pick<
     description:
       'Audience segment engaging specifically around a festival, holiday or cultural event window.',
   },
+  {
+    key: 'adult_wagering',
+    name: 'Adult wagering customers (18+)',
+    description:
+      'Verified adult account holders or account-acquisition prospects for licensed AU wagering.',
+  },
+  {
+    key: 'sports_fans_adult',
+    name: 'Adult sports fans',
+    description:
+      'Adults who follow AFL/NRL/racing; sensitive to betting framed as optional product info vs identity pressure.',
+  },
+  {
+    key: 'parents_youth_advocates',
+    name: 'Parents & youth-safety advocates',
+    description:
+      'Adults concerned about gambling-ad normalisation around sport and children; high sensitivity to family framing.',
+  },
+
 ];
 
 interface SeedCampaign {
@@ -182,6 +201,119 @@ const CAMPAIGNS: readonly SeedCampaign[] = [
       },
     ],
   },
+  {
+    name: '[Demo] Tabcorp — Race-day form guide (compliant website module)',
+    copy: `TAB Race Day Form Guide
+
+Check today's form, fields and prices on TAB.com.au — for customers aged 18+ only.
+
+Compare runners, follow the meetings that matter to you, and only place bets if they fit your budget and your personal limits. This module is informational and does not target children or families.
+
+18+ only. Gamble responsibly. Set deposit limits in your account. If gambling is causing you harm, get free support via Gambling Help Online on 1800 858 858 or visit gamblinghelponline.org.au. You can self-exclude through BetStop, the National Self-Exclusion Register.
+
+Terms and conditions apply. Odds subject to change. Licensed Australian wagering operator.`,
+    campaignType: 'promotional',
+    platform: 'web',
+    geography: { country: 'AU', region: 'National' },
+    applicablePolicyContext: [
+      'wagering_advertising',
+      'internal_marketing_policy',
+      'responsible_gambling',
+    ],
+    audienceSegmentKeys: ['adult_wagering', 'sports_fans_adult', 'existing_customers'],
+    assets: [
+      {
+        type: 'text',
+        title: 'Website hero + body',
+        description:
+          'Compliant Tabcorp-style website module: 18+, RG message, help pathway, BetStop, no exaggerated win claims, no family/children framing.',
+      },
+      {
+        type: 'url',
+        title: 'Landing URL (reference)',
+        url: 'https://example.invalid/demo/tabcorp/race-day-form-guide',
+      },
+    ],
+  },
+  {
+    name: '[Demo] Tabcorp — Guaranteed winner boost (non-compliant website module)',
+    copy: `TAB GUARANTEED WINNER BOOST — THIS WEEKEND ONLY
+
+Bring the kids to watch the footy and turn game day into easy money for the whole family.
+
+Open a TAB account and get a $500 bonus bet plus a locked-in winning multi — you can't lose. Real fans bet big. Financial freedom starts with your next deposit.
+
+No ID checks needed to claim. Offer pushed to all customers including those who previously asked to stop marketing.
+
+Bet now. Win now.`,
+    campaignType: 'promotional',
+    platform: 'web',
+    geography: { country: 'AU', region: 'National' },
+    applicablePolicyContext: [
+      'wagering_advertising',
+      'internal_marketing_policy',
+      'responsible_gambling',
+      'inducements',
+    ],
+    audienceSegmentKeys: [
+      'adult_wagering',
+      'sports_fans_adult',
+      'family_oriented',
+      'younger_digital',
+    ],
+    assets: [
+      {
+        type: 'text',
+        title: 'Website hero (non-compliant)',
+        description:
+          'Intentionally violates AU wagering ad themes: children/family framing, guaranteed wins, wealth promises, missing RG/18+/BetStop, inducements despite opt-out.',
+      },
+      {
+        type: 'url',
+        title: 'Landing URL (reference)',
+        url: 'https://example.invalid/demo/tabcorp/guaranteed-winner-boost',
+      },
+    ],
+  },
+  {
+    name: '[Demo] Tabcorp — Real fans bet through the siren (sentiment risk / legally dressed)',
+    copy: `TAB — REAL FANS DON'T JUST WATCH
+
+If you're serious about the game, you're on the multi before the siren. Don't just talk about your side — back them. Anything less, and are you even a real supporter?
+
+Same odds tools. Same meetings. Same TAB.com.au experience for adults 18+.
+
+18+ only. Gamble responsibly. Call Gambling Help Online on 1800 858 858 or visit gamblinghelponline.org.au. BetStop self-exclusion is available. Terms and conditions apply. Odds subject to change.`,
+    campaignType: 'brand',
+    platform: 'web',
+    geography: { country: 'AU', region: 'National' },
+    applicablePolicyContext: [
+      'wagering_advertising',
+      'internal_marketing_policy',
+      'responsible_gambling',
+      'cultural_sensitivity_guideline',
+    ],
+    audienceSegmentKeys: [
+      'adult_wagering',
+      'sports_fans_adult',
+      'parents_youth_advocates',
+      'family_oriented',
+    ],
+    assets: [
+      {
+        type: 'text',
+        title: 'Website brand module (sentiment risk)',
+        description:
+          'Includes 18+/RG/help/BetStop/T&Cs (legally dressed) but real-fan identity-pressure framing is high sentiment polarisation risk without child/family participation claims.',
+      },
+      {
+        type: 'url',
+        title: 'Landing URL (reference)',
+        url: 'https://example.invalid/demo/tabcorp/real-fans-bet',
+      },
+    ],
+  },
+
 ];
 
 export async function runSeed(): Promise<void> {

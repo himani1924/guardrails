@@ -16,6 +16,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Link href="/review" className="hover:text-slate-50">
               Review queue
             </Link>
+            <Link href="/knowledge" className="hover:text-slate-50">
+              Policies
+            </Link>
             <Link href="/admin" className="hover:text-slate-50">
               Admin
             </Link>

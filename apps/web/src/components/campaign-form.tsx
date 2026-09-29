@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { types } from '@guardrail/core';
 
@@ -80,9 +80,46 @@ export function CampaignForm({
   const [selectedSegments, setSelectedSegments] = useState<string[]>(
     initial?.audienceSegmentKeys ?? [],
   );
-  const [assetText, setAssetText] = useState('');
+  const [assetText, setAssetText] = useState(() => {
+    if (initial?.assets && initial.assets.length > 0) {
+      return initial.assets
+        .map((a) => [a.title, a.description, a.url].filter(Boolean).join(' — '))
+        .join('\n');
+    }
+    return '';
+  });
+  const [knowledgeDocs, setKnowledgeDocs] = useState<
+    Array<{ id: string; title: string; sourceType: string; category?: string | null }>
+  >([]);
+  const [selectedPolicyKeys, setSelectedPolicyKeys] = useState<string[]>(
+    initial?.applicablePolicyContext ?? [],
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/knowledge')
+      .then((r) => r.json())
+      .then((body) => {
+        if (cancelled || !Array.isArray(body.documents)) return;
+        setKnowledgeDocs(
+          body.documents.map(
+            (d: { id: string; title: string; sourceType: string; category?: string | null }) => ({
+              id: d.id,
+              title: d.title,
+              sourceType: d.sourceType,
+              category: d.category,
+            }),
+          ),
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -98,10 +135,15 @@ export function CampaignForm({
         festivalName && festivalKey
           ? { key: festivalKey, name: festivalName }
           : undefined,
-      applicablePolicyContext: policyContext
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean),
+      applicablePolicyContext: Array.from(
+        new Set([
+          ...selectedPolicyKeys,
+          ...policyContext
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean),
+        ]),
+      ),
       audienceSegmentKeys: selectedSegments,
       assets: assetText
         ? [{ type: 'text', title: 'Primary caption', description: assetText }]
@@ -215,7 +257,7 @@ export function CampaignForm({
             className="input font-mono"
           />
         </Field>
-        <Field label="Primary caption / asset description (optional)">
+        <Field label="Campaign creative assets (optional — captions, image notes, URLs)">
           <textarea
             value={assetText}
             onChange={(e) => setAssetText(e.target.value)}
@@ -226,7 +268,57 @@ export function CampaignForm({
       </Card>
 
       <Card>
-        <Field label="Applicable policy context (comma-separated keys)">
+                <div className="mb-4">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-sm text-slate-300">Policies & compliance documents</span>
+            <a href="/knowledge" className="text-xs text-sky-400 hover:underline">
+              Upload / view all
+            </a>
+          </div>
+          {knowledgeDocs.length === 0 ? (
+            <p className="text-sm text-slate-400">
+              No documents in the knowledge base yet. Use Policies to upload rules, then return here.
+            </p>
+          ) : (
+            <div className="grid max-h-56 gap-2 overflow-y-auto sm:grid-cols-2">
+              {knowledgeDocs.map((d) => {
+                const key = (d.category && d.category.trim()) || d.id;
+                const checked = selectedPolicyKeys.includes(key);
+                return (
+                  <label
+                    key={d.id}
+                    className={`flex cursor-pointer items-start gap-2 rounded border p-2 text-sm ${
+                      checked
+                        ? 'border-sky-500 bg-sky-900/30'
+                        : 'border-surface-border bg-surface-soft'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={checked}
+                      onChange={(e) => {
+                        setSelectedPolicyKeys((prev) =>
+                          e.target.checked
+                            ? [...prev, key]
+                            : prev.filter((k) => k !== key),
+                        );
+                      }}
+                    />
+                    <span>
+                      <span className="block font-medium text-slate-100">{d.title}</span>
+                      <span className="block text-xs text-slate-400">
+                        {d.sourceType}
+                        {d.category ? ` · ${d.category}` : ''}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+<Field label="Extra policy keys (comma-separated, optional)">
           <input
             value={policyContext}
             onChange={(e) => setPolicyContext(e.target.value)}

@@ -6,6 +6,8 @@ import type { types } from '@guardrail/core';
 
 import { AppShell } from '@/components/app-shell';
 import { Card, SectionHeading, StatusBadge } from '@/components/ui';
+import { SendToReviewButton } from '@/components/send-to-review-button';
+import { AcceptCampaignButton } from '@/components/accept-campaign-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,6 +39,13 @@ export default async function AnalysisPage(
   }
 
   const findingById = new Map(result.findings.map((f) => [f.id, f]));
+  const analysisComplete = result.status === 'completed';
+  const needsReview =
+    analysisComplete &&
+    (result.risks.some((r) => r.humanReviewRequired) ||
+      result.findings.some((f) => f.requiresHumanReview));
+  const canAccept =
+    analysisComplete && !needsReview && campaign.status !== 'approved';
 
   return (
     <AppShell>
@@ -46,12 +55,21 @@ export default async function AnalysisPage(
           title={campaign.name}
           description={`Run started ${new Date(result.startedAt).toLocaleString()} · provider ${result.provider ?? 'n/a'}`}
         />
-        <Link
-          href={`/campaigns/${campaign.id}`}
-          className="text-sm text-slate-300 hover:text-slate-100"
-        >
-          ← Back to campaign
-        </Link>
+        <div className="flex flex-col items-end gap-2">
+          <Link
+            href={`/campaigns/${campaign.id}`}
+            className="text-sm text-slate-300 hover:text-slate-100"
+          >
+            ← Back to campaign
+          </Link>
+          {needsReview ? (
+            <SendToReviewButton
+              campaignId={campaign.id}
+              analysisRunId={result.runId}
+            />
+          ) : null}
+          {canAccept ? <AcceptCampaignButton campaignId={campaign.id} /> : null}
+        </div>
       </div>
 
       <p className="mb-4 text-xs text-slate-500">

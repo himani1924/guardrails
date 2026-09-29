@@ -166,4 +166,130 @@ Autumn Skincare Refresh — Fictional Beauty Co., previous cycle.
 - This is retained as a reference of what a compliant seasonal campaign looks like.
 `,
   },
+
+  {
+    title:
+      '[Demo Reference] AU wagering advertising compliance themes (public reforms)',
+    sourceType: 'regulatory',
+    category: 'wagering_advertising',
+    geography: 'AU',
+    documentType: 'regulatory_summary',
+    content: `# Australian wagering advertising — compliance themes (demo)
+
+Condensed public themes for Guardrail demos (not legal advice). Sources reflected: Interactive Gambling Act 2001 reforms via Interactive Gambling Amendment (Gambling Reform) Act 2026 (from 1 Jan 2027), ACMA enforcement role, state responsible-gambling expectations.
+
+# Consumer-facing content that must not appear
+
+- Directed to children, or showing children participating in wagering
+- Portraying wagering as a family activity
+- Exaggerated claims about outcomes or "sure wins"
+- Promoting wagering as a path to success, status or achievement
+- Associating wagering with alcohol
+- Misleading statements about odds, offers or risk
+- Missing a required responsible-gambling message under Commonwealth or State/Territory law
+
+# Placement / timing themes (2026 reforms)
+
+- Restrictions during live sport coverage
+- TV/radio blackout windows and hourly caps in protected periods
+- Online ads generally need age-gating and opt-out pathways
+- Limits on sports uniforms and in-venue wagering advertising
+
+# Inducements and at-risk customers
+
+- Direct marketing of inducements to at-risk customers is restricted
+- Monitor red flags (escalating spend, unusual hours, declined deposits, removal of harm tools)
+- Do not market to self-excluded customers or marketing opt-outs
+
+# Website module expectations (this demo)
+
+Compliant Tabcorp-style web promo should: (1) state 18+, (2) include RG message + help resource, (3) mention BetStop/self-exclusion where acquiring/re-engaging accounts, (4) avoid guaranteed-win / get-rich framing, (5) avoid family/children framing, (6) state T&Cs for offers.
+`,
+  },
+  {
+    title: '[Demo Reference] Tabcorp-style AU marketing policy (wagering)',
+    sourceType: 'internal_policy',
+    category: 'marketing_policy',
+    geography: 'AU',
+    documentType: 'policy',
+    content: `# Tabcorp-style internal marketing policy (demo)
+
+Aligned to public AU wagering advertising themes for website campaigns.
+
+# Mandatory on-site elements
+
+- "18+ only. Gamble responsibly." in primary hero/offer modules
+- Help pathway (e.g. Gambling Help Online 1800 858 858 / gamblinghelponline.org.au)
+- BetStop / self-exclusion mention on acquisition or re-engagement modules
+
+# Prohibited claim patterns
+
+- Guaranteed win / can't lose / easy money / financial freedom through betting
+- "Real fans bet" loyalty tests
+- Minors, schools, family game-night, or kids-watching-together as betting context
+- Deposit matches pushed to harm-flagged or opted-out customers
+
+# Human review triggers
+
+- Sport-fandom identity pressure
+- Memorial / grief / hardship adjacency
+- Any inducement module without RG footer
+`,
+  },
+  {
+    title:
+      '[Demo Reference] AU public sentiment & wagering-ad backlash patterns',
+    sourceType: 'historical_campaign',
+    category: 'sentiment_history',
+    geography: 'AU',
+    documentType: 'case_study',
+    content: `# Public sentiment patterns — AU wagering advertising (demo KB)
+
+Synthesised from publicly reported Australian discourse for sentiment agents.
+
+# Stable signals
+
+- Large surveyed support for stronger gambling-ad limits/bans, especially around sport
+- Parents/youth advocates criticise normalisation of betting in live sport
+- "Kids in the room / family watching" framing is a recurring backlash trigger even when 18+ gates exist elsewhere
+
+# Operator reputational flashpoints (reported)
+
+- Tabcorp spam/marketing penalties in public reporting feed "marketing over protection" narratives
+- Victorian regulator actions citing RG process failures and marketing after opt-out create durable trust risk
+- Advocacy groups frame ad saturation as harmful normalisation
+
+# High-risk sentiment themes (can still look "legal")
+
+- Real fans bet / loyalty tests
+- Betting as the main way to enjoy sport with family present
+- Hardship / turn-your-week-around financial rescue framing
+- Humour that trivialises addiction or losses
+
+# Lower-risk posture
+
+- Product-factual race/sports information
+- Clear consumer-protection messaging
+- No identity shaming; no minors; no get-rich promises
+`,
+  },
+  {
+    title:
+      '[Demo Reference] Historical wagering web promo — compliant pattern',
+    sourceType: 'historical_campaign',
+    category: 'historical',
+    geography: 'AU',
+    documentType: 'case_study',
+    content: `# Historical pattern — compliant Tabcorp-style web module (demo)
+
+Prior race-day website module that passed internal review in this demo universe:
+
+- 18+ and Gamble Responsibly above the fold
+- Gambling Help Online + BetStop in module footer
+- Odds as information, not locked-in profit
+- No children/family participation imagery
+- No inducement sent to self-excluded or opted-out customers
+- Sentiment: neutral-to-positive among adult account holders; low polarisation
+`,
+  },
 ];

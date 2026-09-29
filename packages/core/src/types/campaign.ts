@@ -48,6 +48,7 @@ export interface Campaign {
   audienceSegmentIds: string[];
   festivalContext?: FestivalContext;
   assets: CampaignAsset[];
+  applicablePolicyContext: string[];
   status: CampaignStatus;
   createdAt: string;
   updatedAt: string;

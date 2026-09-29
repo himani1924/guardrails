@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 
-import { config, errors, humanReview } from '@guardrail/core';
+import { analyses, config, errors, humanReview } from '@guardrail/core';
 
 import { apiError } from '@/lib/api-error';
 
@@ -9,6 +9,16 @@ const createSchema = z.object({
   campaignId: z.string().uuid(),
   analysisRunId: z.string().uuid().optional(),
 });
+
+function analysisNeedsHumanReview(result: {
+  risks: { humanReviewRequired: boolean }[];
+  findings: { requiresHumanReview: boolean }[];
+}): boolean {
+  return (
+    result.risks.some((r) => r.humanReviewRequired) ||
+    result.findings.some((f) => f.requiresHumanReview)
+  );
+}
 
 export async function GET() {
   try {
@@ -29,9 +39,33 @@ export async function POST(req: NextRequest) {
         issues: parsed.error.issues,
       });
     }
+
+    const analysis = parsed.data.analysisRunId
+      ? await analyses.getAnalysisRun(parsed.data.analysisRunId)
+      : await analyses.getLatestAnalysisRunForCampaign(parsed.data.campaignId);
+
+    if (!analysis || analysis.status !== 'completed') {
+      throw new errors.ValidationError(
+        'A completed analysis is required before opening a review.',
+      );
+    }
+
+    if (!analysisNeedsHumanReview(analysis)) {
+      throw new errors.ValidationError(
+        'Human review is not required for this analysis. Accept the campaign on the analysis page instead.',
+      );
+    }
+
+    const existing = await humanReview.findPendingReviewForCampaign(
+      parsed.data.campaignId,
+    );
+    if (existing) {
+      return NextResponse.json({ reviewId: existing.id, reused: true });
+    }
+
     const reviewId = await humanReview.openReview({
       campaignId: parsed.data.campaignId,
-      analysisRunId: parsed.data.analysisRunId ?? null,
+      analysisRunId: parsed.data.analysisRunId ?? analysis.runId,
       reviewerId: cfg.DEFAULT_REVIEWER_ID,
       reviewerName: cfg.DEFAULT_REVIEWER_NAME,
     });

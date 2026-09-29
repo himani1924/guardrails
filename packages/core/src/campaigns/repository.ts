@@ -28,6 +28,9 @@ function toCampaign(
     festivalContext: row.festivalContext ?? undefined,
     audienceSegmentIds: segmentKeys,
     assets: assets.map(toCampaignAsset),
+    applicablePolicyContext: Array.isArray(row.applicablePolicyContext)
+      ? (row.applicablePolicyContext as string[])
+      : [],
     status: row.status,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

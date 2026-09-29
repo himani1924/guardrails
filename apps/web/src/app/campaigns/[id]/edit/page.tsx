@@ -34,7 +34,13 @@ export default async function EditCampaignPage(
           geography: existing.geography,
           festivalContext: existing.festivalContext,
           audienceSegmentKeys: existing.audienceSegmentIds,
-          applicablePolicyContext: [],
+          applicablePolicyContext: existing.applicablePolicyContext ?? [],
+          assets: existing.assets?.map((a) => ({
+            type: a.type === 'image' || a.type === 'video' || a.type === 'audio' || a.type === 'url' ? a.type : 'text',
+            title: a.title,
+            description: a.description,
+            url: a.url,
+          })),
         }}
       />
     </AppShell>

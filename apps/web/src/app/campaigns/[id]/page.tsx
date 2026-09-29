@@ -6,6 +6,8 @@ import { analyses, campaigns } from '@guardrail/core';
 import { AppShell } from '@/components/app-shell';
 import { Card, SectionHeading, StatusBadge } from '@/components/ui';
 import { RunAnalysisButton } from '@/components/run-analysis-button';
+import { SendToReviewButton } from '@/components/send-to-review-button';
+import { AcceptCampaignButton } from '@/components/accept-campaign-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -95,6 +97,24 @@ export default async function CampaignDetailPage(
             >
               Edit
             </Link>
+            {latestRun &&
+            latestRun.status === 'completed' &&
+            (latestRun.risks.some((r) => r.humanReviewRequired) ||
+              latestRun.findings.some((f) => f.requiresHumanReview)) ? (
+              <SendToReviewButton
+                campaignId={campaign.id}
+                analysisRunId={latestRun.runId}
+              />
+            ) : null}
+            {latestRun &&
+            latestRun.status === 'completed' &&
+            !(
+              latestRun.risks.some((r) => r.humanReviewRequired) ||
+              latestRun.findings.some((f) => f.requiresHumanReview)
+            ) &&
+            campaign.status !== 'approved' ? (
+              <AcceptCampaignButton campaignId={campaign.id} />
+            ) : null}
             <RunAnalysisButton campaignId={campaign.id} />
           </div>
         </div>
