@@ -37,6 +37,7 @@
     "evaluate": "tsx --env-file=../../.env src/evaluation/run.ts"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "drizzle-orm": "^0.36.4",
     "openai": "^4.77.0",
     "pg": "^8.13.1",

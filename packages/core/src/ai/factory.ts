@@ -4,6 +4,7 @@ import { getLogger } from '../logging';
 
 import { MockEmbeddingProvider } from './mock-embedding';
 import { MockLLMProvider } from './mock-provider';
+import { GeminiEmbeddingProvider, GeminiLLMProvider } from './gemini-provider';
 import { OpenAIEmbeddingProvider, OpenAILLMProvider } from './openai-provider';
 import type { EmbeddingProvider, LLMProvider } from './types';
 
@@ -19,6 +20,10 @@ export function getLLMProvider(): LLMProvider {
     case 'openai':
       log.info({ model: cfg.OPENAI_LLM_MODEL }, 'llm_provider_openai');
       llmSingleton = new OpenAILLMProvider();
+      break;
+    case 'gemini':
+      log.info({ model: cfg.GEMINI_LLM_MODEL }, 'llm_provider_gemini');
+      llmSingleton = new GeminiLLMProvider();
       break;
     case 'mock':
     default: {
@@ -45,6 +50,10 @@ export function getEmbeddingProvider(): EmbeddingProvider {
     case 'openai':
       log.info({ model: cfg.OPENAI_EMBEDDING_MODEL }, 'embedding_provider_openai');
       embeddingSingleton = new OpenAIEmbeddingProvider();
+      break;
+    case 'gemini':
+      log.info({ model: cfg.GEMINI_EMBEDDING_MODEL }, 'embedding_provider_gemini');
+      embeddingSingleton = new GeminiEmbeddingProvider();
       break;
     case 'mock':
     default:

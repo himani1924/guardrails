@@ -75,12 +75,16 @@ const EnvSchema = z.object({
     .min(1)
     .default('postgres://guardrail:guardrail@localhost:5432/guardrail'),
 
-  LLM_PROVIDER: z.enum(['mock', 'openai']).default('mock'),
-  EMBEDDING_PROVIDER: z.enum(['mock', 'openai']).default('mock'),
+  LLM_PROVIDER: z.enum(['mock', 'openai', 'gemini']).default('mock'),
+  EMBEDDING_PROVIDER: z.enum(['mock', 'openai', 'gemini']).default('mock'),
 
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_LLM_MODEL: z.string().default('gpt-4o-mini'),
   OPENAI_EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
+
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_LLM_MODEL: z.string().default('gemini-3.5-flash-lite'),
+  GEMINI_EMBEDDING_MODEL: z.string().default('gemini-embedding-001'),
 
   DEFAULT_REVIEWER_ID: z.string().default('reviewer-demo'),
   DEFAULT_REVIEWER_NAME: z.string().default('Demo Reviewer'),
