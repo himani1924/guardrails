@@ -214,18 +214,22 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
     }
     this.client = new OpenAI({ apiKey });
     this.model = opts?.model ?? cfg.OPENAI_EMBEDDING_MODEL;
-    this.dimension = opts?.dimension ?? 1536;
+    this.dimension = opts?.dimension ?? 768;
   }
 
   async embed(req: EmbeddingRequest): Promise<EmbeddingResponse> {
     const started = Date.now();
     const res = await withRetry(
       'openai.embed',
-      () =>
-        this.client.embeddings.create({
-          model: req.model ?? this.model,
+      () => {
+        const model = req.model ?? this.model;
+        return this.client.embeddings.create({
+          model,
           input: req.texts,
-        }),
+          // Only the text-embedding-3 family accepts a custom output size.
+          ...(model.startsWith('text-embedding-3') ? { dimensions: this.dimension } : {}),
+        });
+      },
       DEFAULT_TIMEOUT_MS,
     );
     return {

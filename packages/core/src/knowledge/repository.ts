@@ -1,9 +1,8 @@
-import { eq, inArray } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 
 import { getDb } from '../db/client';
 import { knowledgeChunks, knowledgeDocuments } from '../db/schema';
 import type {
-  KnowledgeChunkRow,
   KnowledgeDocumentRow,
   NewKnowledgeChunkRow,
   NewKnowledgeDocumentRow,
@@ -39,15 +38,23 @@ export async function listDocuments(): Promise<KnowledgeDocumentRow[]> {
   return db.select().from(knowledgeDocuments).orderBy(knowledgeDocuments.title);
 }
 
-export async function loadAllChunks(): Promise<{
-  chunks: KnowledgeChunkRow[];
-  docsById: Map<string, KnowledgeDocumentRow>;
-}> {
+/** Chunks for the re-embed backfill (`npm run db:reembed`). */
+export async function listChunksForReembed(): Promise<Array<{ id: string; content: string }>> {
   const db = getDb();
-  const chunks = await db.select().from(knowledgeChunks);
-  const docIds = Array.from(new Set(chunks.map((c) => c.documentId)));
-  const docs = docIds.length
-    ? await db.select().from(knowledgeDocuments).where(inArray(knowledgeDocuments.id, docIds))
-    : [];
-  return { chunks, docsById: new Map(docs.map((d) => [d.id, d])) };
+  return db
+    .select({ id: knowledgeChunks.id, content: knowledgeChunks.content })
+    .from(knowledgeChunks)
+    .orderBy(asc(knowledgeChunks.documentId), asc(knowledgeChunks.ordinal));
+}
+
+export async function updateChunkEmbedding(
+  chunkId: string,
+  embedding: number[],
+  embeddingModel: string,
+): Promise<void> {
+  const db = getDb();
+  await db
+    .update(knowledgeChunks)
+    .set({ embedding, embeddingModel })
+    .where(eq(knowledgeChunks.id, chunkId));
 }

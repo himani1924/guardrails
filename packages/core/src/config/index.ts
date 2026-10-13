@@ -86,6 +86,14 @@ const EnvSchema = z.object({
   GEMINI_LLM_MODEL: z.string().default('gemini-3.5-flash-lite'),
   GEMINI_EMBEDDING_MODEL: z.string().default('gemini-embedding-001'),
 
+  /**
+   * Output size requested from every embedding provider. MUST equal the
+   * `vector(N)` column size in `knowledge_chunks` (KNOWLEDGE_EMBEDDING_DIMENSION,
+   * currently 768). OpenAI text-embedding-3-* and gemini-embedding-001 both
+   * support truncated outputs, so one shared size works for every provider.
+   */
+  EMBEDDING_DIMENSION: z.coerce.number().int().min(1).max(2000).default(768),
+
   DEFAULT_REVIEWER_ID: z.string().default('reviewer-demo'),
   DEFAULT_REVIEWER_NAME: z.string().default('Demo Reviewer'),
 });

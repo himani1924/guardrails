@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, type EmbedContentRequest } from '@google/generative-ai';
 import type { ZodType, ZodTypeDef } from 'zod';
 
 import { loadConfig } from '../config';
@@ -25,7 +25,7 @@ const log = getLogger({ component: 'ai.gemini' });
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_RETRIES = 2;
-/** gemini-embedding-001 default output size */
+/** Requested output size (gemini-embedding-001 defaults to 3072 otherwise). */
 const DEFAULT_EMBEDDING_DIMENSION = 768;
 
 async function withRetry<T>(
@@ -249,7 +249,13 @@ export class GeminiEmbeddingProvider implements EmbeddingProvider {
     for (const text of req.texts) {
       const res = await withRetry(
         'gemini.embed',
-        () => model.embedContent(text),
+        () =>
+          // `outputDimensionality` is accepted by the REST API but missing
+          // from this SDK version's types; the SDK forwards the object as-is.
+          model.embedContent({
+            content: { role: 'user', parts: [{ text }] },
+            outputDimensionality: this.dimension,
+          } as EmbedContentRequest),
         DEFAULT_TIMEOUT_MS,
       );
       const values = res.embedding.values;

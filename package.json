@@ -20,6 +20,7 @@
     "db:migrate": "npm --workspace @guardrail/core run db:migrate",
     "db:seed": "npm --workspace @guardrail/core run db:seed",
     "db:ingest": "npm --workspace @guardrail/core run db:ingest",
+    "db:reembed": "npm --workspace @guardrail/core run db:reembed",
     "db:studio": "npm --workspace @guardrail/core run db:studio",
     "evaluate": "npm --workspace @guardrail/core run evaluate"
   },

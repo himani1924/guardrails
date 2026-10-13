@@ -33,6 +33,7 @@
     "db:migrate": "tsx --env-file=../../.env src/db/migrate.ts",
     "db:seed": "tsx --env-file=../../.env src/db/seed.ts",
     "db:ingest": "tsx --env-file=../../.env src/knowledge/ingest-cli.ts",
+    "db:reembed": "tsx --env-file=../../.env src/knowledge/reembed-cli.ts",
     "db:studio": "drizzle-kit studio",
     "evaluate": "tsx --env-file=../../.env src/evaluation/run.ts"
   },

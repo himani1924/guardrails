@@ -42,16 +42,16 @@ export function getEmbeddingProvider(): EmbeddingProvider {
   switch (cfg.EMBEDDING_PROVIDER) {
     case 'openai':
       log.info({ model: cfg.OPENAI_EMBEDDING_MODEL }, 'embedding_provider_openai');
-      embeddingSingleton = new OpenAIEmbeddingProvider();
+      embeddingSingleton = new OpenAIEmbeddingProvider({ dimension: cfg.EMBEDDING_DIMENSION });
       break;
     case 'gemini':
       log.info({ model: cfg.GEMINI_EMBEDDING_MODEL }, 'embedding_provider_gemini');
-      embeddingSingleton = new GeminiEmbeddingProvider();
+      embeddingSingleton = new GeminiEmbeddingProvider({ dimension: cfg.EMBEDDING_DIMENSION });
       break;
     case 'mock':
     default:
       log.info('embedding_provider_mock');
-      embeddingSingleton = new MockEmbeddingProvider();
+      embeddingSingleton = new MockEmbeddingProvider(cfg.EMBEDDING_DIMENSION);
   }
   return embeddingSingleton;
 }
