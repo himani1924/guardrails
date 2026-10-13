@@ -2,7 +2,7 @@ import { audience, campaigns } from '@guardrail/core';
 import { notFound } from 'next/navigation';
 
 import { AppShell } from '@/components/app-shell';
-import { SectionHeading } from '@/components/ui';
+import { PageHeader } from '@/components/ui';
 import { CampaignForm } from '@/components/campaign-form';
 
 export const dynamic = 'force-dynamic';
@@ -21,7 +21,11 @@ export default async function EditCampaignPage(
 
   return (
     <AppShell>
-      <SectionHeading eyebrow={`Editing ${existing.name}`} title="Edit campaign" />
+      <PageHeader
+        eyebrow={`Editing · ${existing.name}`}
+        title="Edit campaign"
+        description="Saving changes keeps earlier analysis runs. Run the analysis again to check the new version."
+      />
       <CampaignForm
         mode="edit"
         segments={segments}

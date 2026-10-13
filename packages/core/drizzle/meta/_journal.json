@@ -15,6 +15,13 @@
       "when": 1789919316666,
       "tag": "0001_soft_arachne",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791873453150,
+      "tag": "0002_pgvector",
+      "breakpoints": true
     }
   ]
 }

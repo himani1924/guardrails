@@ -86,6 +86,14 @@ const EnvSchema = z.object({
   GEMINI_LLM_MODEL: z.string().default('gemini-3.5-flash-lite'),
   GEMINI_EMBEDDING_MODEL: z.string().default('gemini-embedding-001'),
 
+  /**
+   * Output size requested from every embedding provider. MUST equal the
+   * `vector(N)` column size in `knowledge_chunks` (KNOWLEDGE_EMBEDDING_DIMENSION,
+   * currently 768). OpenAI text-embedding-3-* and gemini-embedding-001 both
+   * support truncated outputs, so one shared size works for every provider.
+   */
+  EMBEDDING_DIMENSION: z.coerce.number().int().min(1).max(2000).default(768),
+
   DEFAULT_REVIEWER_ID: z.string().default('reviewer-demo'),
   DEFAULT_REVIEWER_NAME: z.string().default('Demo Reviewer'),
 });
@@ -108,9 +116,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new Error(`Invalid environment configuration: ${issues}`);
   }
   cached = parsed.data;
-  // #region agent log
-  fetch('http://127.0.0.1:7322/ingest/363266d2-671e-41b8-8614-9660cd345a57',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0685fc'},body:JSON.stringify({sessionId:'0685fc',runId:'post-fix',hypothesisId:'G',location:'packages/core/src/config/index.ts:loadConfig',message:'resolved AI providers',data:{llmProvider:cached.LLM_PROVIDER,embeddingProvider:cached.EMBEDDING_PROVIDER,hasOpenAiKey:Boolean(cached.OPENAI_API_KEY)},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   return cached;
 }
 

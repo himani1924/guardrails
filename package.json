@@ -20,13 +20,12 @@
     "db:migrate": "npm --workspace @guardrail/core run db:migrate",
     "db:seed": "npm --workspace @guardrail/core run db:seed",
     "db:ingest": "npm --workspace @guardrail/core run db:ingest",
+    "db:reembed": "npm --workspace @guardrail/core run db:reembed",
     "db:studio": "npm --workspace @guardrail/core run db:studio",
     "evaluate": "npm --workspace @guardrail/core run evaluate"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
-    "@typescript-eslint/eslint-plugin": "^8.19.0",
-    "@typescript-eslint/parser": "^8.19.0",
     "eslint": "^9.17.0",
     "prettier": "^3.4.2",
     "typescript": "^5.7.2",

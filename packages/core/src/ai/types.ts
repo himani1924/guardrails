@@ -65,25 +65,3 @@ export interface EmbeddingProvider {
   readonly dimension: number;
   embed(req: EmbeddingRequest): Promise<EmbeddingResponse>;
 }
-
-export interface UsageAccumulator {
-  promptTokens: number;
-  completionTokens: number;
-  costUsd?: number;
-  latencyMs: number;
-  calls: number;
-}
-
-export function newUsage(): UsageAccumulator {
-  return { promptTokens: 0, completionTokens: 0, latencyMs: 0, calls: 0 };
-}
-
-export function addUsage(
-  acc: UsageAccumulator,
-  add: { promptTokens: number; completionTokens: number; latencyMs: number },
-): void {
-  acc.promptTokens += add.promptTokens;
-  acc.completionTokens += add.completionTokens;
-  acc.latencyMs += add.latencyMs;
-  acc.calls += 1;
-}

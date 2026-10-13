@@ -1,11 +1,12 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { types } from '@guardrail/core';
 
-import { Card } from './ui';
+import { Spinner } from './spinner';
+import { Alert, Card } from './ui';
 
 const CAMPAIGN_TYPES = [
   'promotional',
@@ -30,6 +31,47 @@ const PLATFORMS = [
 ] as const;
 
 type Segment = types.AudienceSegment;
+
+/**
+ * Draft persistence (new-campaign form only). Edit forms are not drafted, so a
+ * stale local draft can never silently overwrite server data.
+ */
+const DRAFT_KEY = 'guardrail:new-campaign-draft:v1';
+const DRAFT_DEBOUNCE_MS = 500;
+
+interface CampaignDraft {
+  name: string;
+  copy: string;
+  campaignType: string;
+  platform: string;
+  country: string;
+  region: string;
+  festivalName: string;
+  festivalKey: string;
+  policyContext: string;
+  selectedSegments: string[];
+  selectedPolicyKeys: string[];
+  savedAt: string;
+}
+
+function readDraft(): CampaignDraft | null {
+  try {
+    const raw = window.localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as Partial<CampaignDraft>;
+    return typeof d === 'object' && d !== null ? (d as CampaignDraft) : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearStoredDraft() {
+  try {
+    window.localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // storage unavailable (private mode etc.): nothing to clear
+  }
+}
 
 interface CampaignPayload {
   name: string;
@@ -80,14 +122,9 @@ export function CampaignForm({
   const [selectedSegments, setSelectedSegments] = useState<string[]>(
     initial?.audienceSegmentKeys ?? [],
   );
-  const [assetText, setAssetText] = useState(() => {
-    if (initial?.assets && initial.assets.length > 0) {
-      return initial.assets
-        .map((a) => [a.title, a.description, a.url].filter(Boolean).join(' — '))
-        .join('\n');
-    }
-    return '';
-  });
+  // Assets field is hidden for now (see the commented-out "Campaign creative assets"
+  // field below). To restore: bring back an `assetText` state seeded from
+  // initial.assets and send [{ type: 'text', title: 'Primary caption', description: assetText }].
   const [knowledgeDocs, setKnowledgeDocs] = useState<
     Array<{ id: string; title: string; sourceType: string; category?: string | null }>
   >([]);
@@ -96,14 +133,98 @@ export function CampaignForm({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
+  const draftEnabled = mode === 'create';
+  // Restore happens after mount (localStorage is client-only), so SSR and the
+  // first client render match and there is no hydration mismatch.
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+  const [draftRestored, setDraftRestored] = useState(false);
+  const [policiesLoading, setPoliciesLoading] = useState(false);
+  const skipNextSave = useRef(false);
 
   useEffect(() => {
-    let cancelled = false;
-    fetch('/api/knowledge')
-      .then((r) => r.json())
-      .then((body) => {
-        if (cancelled || !Array.isArray(body.documents)) return;
+    if (!draftEnabled) return;
+    const d = readDraft();
+    if (d) {
+      const isType = (v: string): v is CampaignPayload['campaignType'] =>
+        (CAMPAIGN_TYPES as readonly string[]).includes(v);
+      const isPlatform = (v: string): v is CampaignPayload['platform'] =>
+        (PLATFORMS as readonly string[]).includes(v);
+      setName(String(d.name ?? ''));
+      setCopy(String(d.copy ?? ''));
+      if (isType(String(d.campaignType))) setCampaignType(d.campaignType as CampaignPayload['campaignType']);
+      if (isPlatform(String(d.platform))) setPlatform(d.platform as CampaignPayload['platform']);
+      setCountry(String(d.country ?? 'IN'));
+      setRegion(String(d.region ?? ''));
+      setFestivalName(String(d.festivalName ?? ''));
+      setFestivalKey(String(d.festivalKey ?? ''));
+      setPolicyContext(String(d.policyContext ?? ''));
+      setSelectedSegments(Array.isArray(d.selectedSegments) ? d.selectedSegments.map(String) : []);
+      setSelectedPolicyKeys(Array.isArray(d.selectedPolicyKeys) ? d.selectedPolicyKeys.map(String) : []);
+      setDraftSavedAt(d.savedAt ?? null);
+      setDraftRestored(true);
+      skipNextSave.current = true;
+    }
+    setDraftLoaded(true);
+  }, [draftEnabled]);
+
+  // Debounced autosave of the draft.
+  useEffect(() => {
+    if (!draftEnabled || !draftLoaded) return;
+    if (skipNextSave.current) {
+      skipNextSave.current = false;
+      return;
+    }
+    const empty =
+      !name && !copy && !region && !festivalName && !policyContext &&
+      selectedSegments.length === 0 && selectedPolicyKeys.length === 0;
+    const t = window.setTimeout(() => {
+      if (empty) {
+        clearStoredDraft();
+        setDraftSavedAt(null);
+        return;
+      }
+      const draft: CampaignDraft = {
+        name, copy, campaignType, platform, country, region, festivalName, festivalKey,
+        policyContext, selectedSegments, selectedPolicyKeys,
+        savedAt: new Date().toISOString(),
+      };
+      try {
+        window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+        setDraftSavedAt(draft.savedAt);
+      } catch {
+        // storage full / unavailable: keep working without a draft
+      }
+    }, DRAFT_DEBOUNCE_MS);
+    return () => window.clearTimeout(t);
+  }, [
+    draftEnabled, draftLoaded, name, copy, campaignType, platform, country, region,
+    festivalName, festivalKey, policyContext, selectedSegments, selectedPolicyKeys,
+  ]);
+
+  function clearDraft() {
+    clearStoredDraft();
+    skipNextSave.current = true;
+    setName('');
+    setCopy('');
+    setCampaignType('promotional');
+    setPlatform('instagram');
+    setCountry('IN');
+    setRegion('');
+    setFestivalName('');
+    setFestivalKey('');
+    setPolicyContext('');
+    setSelectedSegments([]);
+    setSelectedPolicyKeys([]);
+    setDraftSavedAt(null);
+    setDraftRestored(false);
+  }
+
+  const loadPolicies = useCallback(async () => {
+    setPoliciesLoading(true);
+    try {
+      const body = await fetch('/api/knowledge', { cache: 'no-store' }).then((r) => r.json());
+      if (Array.isArray(body.documents)) {
         setKnowledgeDocs(
           body.documents.map(
             (d: { id: string; title: string; sourceType: string; category?: string | null }) => ({
@@ -114,12 +235,29 @@ export function CampaignForm({
             }),
           ),
         );
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
+      }
+    } catch {
+      // keep the current list if the refresh fails
+    } finally {
+      setPoliciesLoading(false);
+    }
   }, []);
+
+  // Load policies on mount and whenever the tab regains focus, so documents
+  // uploaded in another tab show up without leaving this form.
+  useEffect(() => {
+    void loadPolicies();
+    const onFocus = () => void loadPolicies();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void loadPolicies();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [loadPolicies]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -145,9 +283,17 @@ export function CampaignForm({
         ]),
       ),
       audienceSegmentKeys: selectedSegments,
-      assets: assetText
-        ? [{ type: 'text', title: 'Primary caption', description: assetText }]
-        : [],
+      // Assets UI hidden: new campaigns send none; edits resend the existing
+      // assets unchanged so saving the form never deletes them.
+      assets:
+        mode === 'edit'
+          ? (initial?.assets ?? []).map((a) => ({
+              type: a.type,
+              ...(a.title ? { title: a.title } : {}),
+              ...(a.description ? { description: a.description } : {}),
+              ...(a.url ? { url: a.url } : {}),
+            }))
+          : [],
     };
 
     try {
@@ -164,6 +310,10 @@ export function CampaignForm({
         throw new Error(body?.error?.message ?? 'Request failed');
       }
       const id = body.campaign?.id ?? initialId;
+      if (draftEnabled) {
+        skipNextSave.current = true;
+        clearStoredDraft();
+      }
       router.push(`/campaigns/${id}`);
       router.refresh();
     } catch (err) {
@@ -175,14 +325,24 @@ export function CampaignForm({
 
   return (
     <form onSubmit={submit} className="space-y-4">
+      {draftEnabled && draftRestored ? (
+        <Alert tone="info" title="Draft restored">
+          Your unsaved campaign was restored from this browser. Use <strong>Clear draft</strong> to start over.
+        </Alert>
+      ) : null}
       {error ? (
-        <Card className="border-red-800 bg-red-950/50 text-sm text-red-100">
+        <Alert tone="error" title="Could not save the campaign">
           {error}
-        </Card>
+        </Alert>
       ) : null}
 
       <Card>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <FormSection
+          step={1}
+          title="Basics"
+          description="Name, format and where the campaign will run."
+        />
+        <div className="grid gap-5 sm:grid-cols-2">
           <Field label="Name">
             <input
               value={name}
@@ -246,6 +406,12 @@ export function CampaignForm({
       </Card>
 
       <Card>
+        <FormSection
+          step={2}
+          title="Content"
+          description="The copy is what the rules and AI agents analyse."
+        />
+        <div className="space-y-5">
         <Field label="Campaign copy">
           <textarea
             value={copy}
@@ -257,27 +423,37 @@ export function CampaignForm({
             className="input font-mono"
           />
         </Field>
-        <Field label="Campaign creative assets (optional — captions, image notes, URLs)">
-          <textarea
-            value={assetText}
-            onChange={(e) => setAssetText(e.target.value)}
-            rows={3}
-            className="input"
-          />
-        </Field>
+        {/* Hidden for now: "Campaign creative assets (optional — captions, image notes, URLs)"
+            textarea bound to assetText. Restore together with the assetText state above. */}
+        </div>
       </Card>
 
       <Card>
-                <div className="mb-4">
+        <FormSection
+          step={3}
+          title="Policy context & audience"
+          description="Choose the policies that apply and the audience personas to simulate."
+        />
+        <div className="mb-5">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="text-sm text-slate-300">Policies & compliance documents</span>
-            <a href="/knowledge" className="text-xs text-sky-400 hover:underline">
-              Upload / view all
-            </a>
+            <span className="field-label !mb-0">Policies & compliance documents</span>
+            <span className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => void loadPolicies()}
+                disabled={policiesLoading}
+                className="link text-xs disabled:opacity-60"
+              >
+                {policiesLoading ? 'Refreshing…' : 'Refresh policies'}
+              </button>
+              <a href="/knowledge" target="_blank" rel="noopener noreferrer" className="link text-xs">
+                Upload policy in new tab ↗
+              </a>
+            </span>
           </div>
           {knowledgeDocs.length === 0 ? (
-            <p className="text-sm text-slate-400">
-              No documents in the knowledge base yet. Use Policies to upload rules, then return here.
+            <p className="rounded-lg border border-dashed border-slate-700 bg-surface-raised p-4 text-sm text-ink-muted">
+              No documents in the knowledge base yet. Upload one in a new tab; this list refreshes when you come back to this tab.
             </p>
           ) : (
             <div className="grid max-h-56 gap-2 overflow-y-auto sm:grid-cols-2">
@@ -287,15 +463,15 @@ export function CampaignForm({
                 return (
                   <label
                     key={d.id}
-                    className={`flex cursor-pointer items-start gap-2 rounded border p-2 text-sm ${
+                    className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-sm transition-colors ${
                       checked
-                        ? 'border-sky-500 bg-sky-900/30'
-                        : 'border-surface-border bg-surface-soft'
+                        ? 'border-brand-500 bg-brand-500/10 ring-1 ring-brand-500'
+                        : 'border-line bg-surface hover:border-slate-600 hover:bg-white/5'
                     }`}
                   >
                     <input
                       type="checkbox"
-                      className="mt-1"
+                      className="mt-0.5 h-4 w-4 accent-brand-600"
                       checked={checked}
                       onChange={(e) => {
                         setSelectedPolicyKeys((prev) =>
@@ -306,8 +482,8 @@ export function CampaignForm({
                       }}
                     />
                     <span>
-                      <span className="block font-medium text-slate-100">{d.title}</span>
-                      <span className="block text-xs text-slate-400">
+                      <span className="block font-medium text-ink">{d.title}</span>
+                      <span className="mt-0.5 block text-xs text-ink-subtle">
                         {d.sourceType}
                         {d.category ? ` · ${d.category}` : ''}
                       </span>
@@ -318,7 +494,8 @@ export function CampaignForm({
             </div>
           )}
         </div>
-<Field label="Extra policy keys (comma-separated, optional)">
+        <div className="space-y-5">
+        <Field label="Extra policy keys (comma-separated, optional)">
           <input
             value={policyContext}
             onChange={(e) => setPolicyContext(e.target.value)}
@@ -333,14 +510,15 @@ export function CampaignForm({
               return (
                 <label
                   key={s.id}
-                  className={`flex cursor-pointer items-start gap-2 rounded border p-2 text-sm ${
+                  className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-sm transition-colors ${
                     checked
-                      ? 'border-sky-500 bg-sky-900/30'
-                      : 'border-surface-border bg-surface-soft'
+                      ? 'border-brand-500 bg-brand-500/10 ring-1 ring-brand-500'
+                      : 'border-line bg-surface hover:border-slate-600 hover:bg-white/5'
                   }`}
                 >
                   <input
                     type="checkbox"
+                    className="mt-0.5 h-4 w-4 accent-brand-600"
                     checked={checked}
                     onChange={(e) => {
                       setSelectedSegments((prev) =>
@@ -351,50 +529,80 @@ export function CampaignForm({
                     }}
                   />
                   <span>
-                    <span className="block font-medium text-slate-100">{s.name}</span>
-                    <span className="block text-xs text-slate-400">{s.description}</span>
+                    <span className="block font-medium text-ink">{s.name}</span>
+                    <span className="mt-0.5 block text-xs text-ink-subtle">{s.description}</span>
                   </span>
                 </label>
               );
             })}
           </div>
         </Field>
+        </div>
       </Card>
 
-      <div className="flex items-center justify-end gap-3">
+      <div className="sticky bottom-0 -mx-4 flex items-center justify-end gap-3 border-t border-line bg-canvas/95 px-4 py-4 backdrop-blur sm:mx-0 sm:rounded-xl sm:border sm:bg-surface sm:px-5">
+        <span className="mr-auto hidden items-center gap-3 text-xs text-ink-subtle sm:flex">
+          {draftEnabled ? (
+            <>
+              <span aria-live="polite">
+                {draftSavedAt
+                  ? `Draft saved · ${new Date(draftSavedAt).toLocaleTimeString()}`
+                  : 'Changes are saved as a draft in this browser'}
+              </span>
+              {draftSavedAt ? (
+                <button type="button" onClick={clearDraft} disabled={busy} className="link">
+                  Clear draft
+                </button>
+              ) : null}
+            </>
+          ) : (
+            'Saved campaigns can be analysed from their detail page.'
+          )}
+        </span>
         <button
-          type="submit"
+          type="button"
+          onClick={() => router.back()}
           disabled={busy}
-          className="rounded bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+          className="btn btn-secondary"
         >
+          Cancel
+        </button>
+        <button type="submit" disabled={busy} className="btn btn-primary">
+          {busy ? <Spinner /> : null}
           {busy ? 'Saving…' : mode === 'create' ? 'Create campaign' : 'Save changes'}
         </button>
       </div>
-
-      <style jsx>{`
-        .input {
-          width: 100%;
-          border-radius: 6px;
-          border: 1px solid rgb(31 41 55);
-          background: rgb(17 24 39);
-          padding: 0.5rem 0.75rem;
-          color: rgb(241 245 249);
-          font-size: 0.875rem;
-        }
-        .input:focus {
-          outline: 2px solid rgb(56 189 248);
-          outline-offset: -1px;
-        }
-      `}</style>
     </form>
   );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block text-sm">
-      <span className="mb-1 block text-slate-300">{label}</span>
+    <label className="block">
+      <span className="field-label">{label}</span>
       {children}
     </label>
+  );
+}
+
+function FormSection({
+  step,
+  title,
+  description,
+}: {
+  step: number;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="mb-5 flex items-start gap-3 border-b border-line pb-4">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-500/10 text-sm font-semibold text-brand-300">
+        {step}
+      </span>
+      <div>
+        <h2 className="text-base font-semibold text-ink">{title}</h2>
+        <p className="mt-0.5 text-sm text-ink-muted">{description}</p>
+      </div>
+    </div>
   );
 }

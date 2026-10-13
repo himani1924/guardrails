@@ -1,5 +1,3 @@
-import { eq } from 'drizzle-orm';
-
 import { getDb } from '../db/client';
 import { campaigns } from '../db/schema';
 
@@ -65,9 +63,4 @@ export async function findCampaignByPrefix(prefix: string): Promise<string | nul
   const rows = await db.select().from(campaigns);
   const match = rows.find((r) => r.name.startsWith(prefix));
   return match ? match.id : null;
-}
-
-// Small helper — reused by the runner.
-export function _touch() {
-  return eq;
 }

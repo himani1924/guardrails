@@ -3,6 +3,9 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import { IconSparkles } from './icons';
+import { Spinner } from './spinner';
+
 export function RunAnalysisButton({ campaignId }: { campaignId: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -31,11 +34,19 @@ export function RunAnalysisButton({ campaignId }: { campaignId: string }) {
       <button
         onClick={run}
         disabled={busy}
-        className="rounded bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-60"
+        className="btn btn-primary"
       >
-        {busy ? 'Analyzing…' : 'Run analysis'}
+        {busy ? (
+          <>
+            <Spinner /> Analyzing…
+          </>
+        ) : (
+          <>
+            <IconSparkles width={16} height={16} /> Run analysis
+          </>
+        )}
       </button>
-      {error ? <span className="text-xs text-red-300">{error}</span> : null}
+      {error ? <span role="alert" className="max-w-xs text-right text-xs text-rose-600">{error}</span> : null}
     </div>
   );
 }

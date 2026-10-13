@@ -27,14 +27,7 @@ export function getLLMProvider(): LLMProvider {
       break;
     case 'mock':
     default: {
-      try {
-        log.info('llm_provider_mock');
-      } catch (err) {
-        // #region agent log
-        fetch('http://127.0.0.1:7322/ingest/363266d2-671e-41b8-8614-9660cd345a57',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0685fc'},body:JSON.stringify({sessionId:'0685fc',runId:'pre-fix',hypothesisId:'C',location:'packages/core/src/ai/factory.ts:getLLMProvider',message:'log.info threw in getLLMProvider',data:{errorMessage:err instanceof Error ? err.message : String(err),provider:cfg.LLM_PROVIDER},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-        throw err;
-      }
+      log.info('llm_provider_mock');
       const mock = new MockLLMProvider();
       programDemoFixtures(mock);
       llmSingleton = mock;
@@ -49,16 +42,16 @@ export function getEmbeddingProvider(): EmbeddingProvider {
   switch (cfg.EMBEDDING_PROVIDER) {
     case 'openai':
       log.info({ model: cfg.OPENAI_EMBEDDING_MODEL }, 'embedding_provider_openai');
-      embeddingSingleton = new OpenAIEmbeddingProvider();
+      embeddingSingleton = new OpenAIEmbeddingProvider({ dimension: cfg.EMBEDDING_DIMENSION });
       break;
     case 'gemini':
       log.info({ model: cfg.GEMINI_EMBEDDING_MODEL }, 'embedding_provider_gemini');
-      embeddingSingleton = new GeminiEmbeddingProvider();
+      embeddingSingleton = new GeminiEmbeddingProvider({ dimension: cfg.EMBEDDING_DIMENSION });
       break;
     case 'mock':
     default:
       log.info('embedding_provider_mock');
-      embeddingSingleton = new MockEmbeddingProvider();
+      embeddingSingleton = new MockEmbeddingProvider(cfg.EMBEDDING_DIMENSION);
   }
   return embeddingSingleton;
 }

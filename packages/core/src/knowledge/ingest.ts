@@ -4,6 +4,7 @@ import type { KnowledgeSourceType } from '../types/enums';
 
 import { chunkMarkdown } from './chunker';
 import { replaceChunks, upsertDocument } from './repository';
+import { assertEmbeddingDimension, embeddingModelId } from './vector';
 
 const log = getLogger({ component: 'knowledge.ingest' });
 
@@ -39,7 +40,8 @@ export async function ingestDocument(doc: IngestDocumentInput): Promise<string> 
 
   const pieces = chunkMarkdown(doc.content);
   const embedder = getEmbeddingProvider();
-  const { vectors } = await embedder.embed({ texts: pieces });
+  const { vectors, model } = await embedder.embed({ texts: pieces });
+  const embeddingModel = embeddingModelId(embedder, model);
 
   await replaceChunks(
     inserted.id,
@@ -47,7 +49,8 @@ export async function ingestDocument(doc: IngestDocumentInput): Promise<string> 
       ordinal: i,
       content,
       tokenCount: Math.ceil(content.length / 4),
-      embedding: vectors[i],
+      embedding: assertEmbeddingDimension(vectors[i]),
+      embeddingModel,
       metadata: { chunkOf: doc.title },
     })),
   );
