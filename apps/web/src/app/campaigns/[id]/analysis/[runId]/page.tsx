@@ -5,21 +5,27 @@ import { analyses, campaigns } from '@guardrail/core';
 import type { types } from '@guardrail/core';
 
 import { AppShell } from '@/components/app-shell';
-import { Card, SectionHeading, StatusBadge } from '@/components/ui';
+import { FindingCard, agentLabel } from '@/components/finding-card';
+import { IconArrowLeft, IconShield, IconSparkles, IconUsers } from '@/components/icons';
+import { RiskCard } from '@/components/risk-card';
+import {
+  Alert,
+  Card,
+  ConfidenceMeter,
+  EmptyState,
+  PageHeader,
+  SectionHeading,
+  StatusBadge,
+  Tag,
+} from '@/components/ui';
+import type { Level } from '@/components/ui';
 import { SendToReviewButton } from '@/components/send-to-review-button';
 import { AcceptCampaignButton } from '@/components/accept-campaign-button';
 
 export const dynamic = 'force-dynamic';
 
-type RiskDim = types.RiskDimension;
-const DIM_LABEL: Record<RiskDim, string> = {
-  compliance: 'Compliance',
-  cultural: 'Cultural',
-  sentiment: 'Sentiment',
-  brand: 'Brand',
-  evidence: 'Evidence',
-  polarization: 'Polarization',
-};
+const LEVEL_ORDER: types.RiskLevel[] = ['critical', 'high', 'medium', 'low', 'unknown'];
+const SEVERITY_ORDER: types.Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
 
 export default async function AnalysisPage(
   props: { params: Promise<{ id: string; runId: string }> },
@@ -47,214 +53,199 @@ export default async function AnalysisPage(
   const canAccept =
     analysisComplete && !needsReview && campaign.status !== 'approved';
 
+  const overall: Level =
+    LEVEL_ORDER.find((l) => l !== 'unknown' && result.risks.some((r) => r.level === l)) ?? 'unknown';
+  const bySeverity = (f: types.Finding, g: types.Finding) =>
+    SEVERITY_ORDER.indexOf(f.severity) - SEVERITY_ORDER.indexOf(g.severity);
+  const ruleFindings = result.findings.filter((f) => f.producedBy === 'rule_engine').sort(bySeverity);
+  const agentFindings = result.findings.filter((f) => f.producedBy !== 'rule_engine').sort(bySeverity);
+  const sevCount = (s: types.Severity) => result.findings.filter((f) => f.severity === s).length;
+
   return (
     <AppShell>
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <SectionHeading
-          eyebrow={`Analysis · ${result.status}`}
-          title={campaign.name}
-          description={`Run started ${new Date(result.startedAt).toLocaleString()} · provider ${result.provider ?? 'n/a'}`}
-        />
-        <div className="flex flex-col items-end gap-2">
-          <Link
-            href={`/campaigns/${campaign.id}`}
-            className="text-sm text-slate-300 hover:text-slate-100"
-          >
-            ← Back to campaign
-          </Link>
-          {needsReview ? (
-            <SendToReviewButton
-              campaignId={campaign.id}
-              analysisRunId={result.runId}
-            />
-          ) : null}
-          {canAccept ? <AcceptCampaignButton campaignId={campaign.id} /> : null}
+      <Link
+        href={`/campaigns/${campaign.id}`}
+        className="mb-4 inline-flex items-center gap-1.5 text-sm text-ink-subtle hover:text-ink"
+      >
+        <IconArrowLeft width={16} height={16} /> Back to campaign
+      </Link>
+      <PageHeader
+        eyebrow={`Analysis results · ${result.status}`}
+        title={campaign.name}
+        description={`Run started ${new Date(result.startedAt).toLocaleString()} · provider ${result.provider ?? 'n/a'}`}
+        actions={
+          <>
+            {needsReview ? (
+              <SendToReviewButton campaignId={campaign.id} analysisRunId={result.runId} />
+            ) : null}
+            {canAccept ? <AcceptCampaignButton campaignId={campaign.id} /> : null}
+          </>
+        }
+      />
+
+      <Alert tone="info" title="Advisory output">
+        These are AI-assisted risk signals and simulated audience perspectives, not factual
+        predictions of public reaction. A human reviewer makes the final decision.
+      </Alert>
+
+      {/* Summary strip */}
+      <Card className="mt-6">
+        <div className="grid gap-6 sm:grid-cols-3">
+          <div>
+            <p className="eyebrow">Overall risk</p>
+            <div className="mt-2 flex items-center gap-2">
+              <StatusBadge level={overall} label={overall} />
+              {needsReview ? <Tag tone="amber">Human review required</Tag> : null}
+            </div>
+            <p className="mt-2 text-xs text-ink-subtle">Highest level across the six risk dimensions.</p>
+          </div>
+          <div>
+            <p className="eyebrow">Findings</p>
+            <p className="mt-1 text-2xl font-semibold text-ink">{result.findings.length}</p>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {SEVERITY_ORDER.filter((s) => sevCount(s) > 0).map((s) => (
+                <Tag key={s}>
+                  {sevCount(s)} {s}
+                </Tag>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="eyebrow">Sources of findings</p>
+            <p className="mt-1 text-sm text-ink-muted">
+              <strong className="text-ink">{ruleFindings.length}</strong> from deterministic rules ·{' '}
+              <strong className="text-ink">{agentFindings.length}</strong> from AI agents
+            </p>
+            <p className="mt-1 text-sm text-ink-muted">
+              <strong className="text-ink">{result.recommendations.length}</strong> recommendations ·{' '}
+              <strong className="text-ink">{result.audiencePerspectives.length}</strong> personas
+            </p>
+          </div>
         </div>
-      </div>
+      </Card>
 
-      <p className="mb-4 text-xs text-slate-500">
-        These are AI-assisted risk signals and simulated audience perspectives —
-        not factual predictions of public reaction. A human reviewer makes the
-        final decision.
-      </p>
+      <SectionHeading
+        eyebrow="Overview"
+        title="Risk dimensions"
+        description="Scored by deterministic code from the findings, not by the LLM."
+      />
+      {result.risks.length === 0 ? (
+        <EmptyState title="No risk assessments for this run" />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {result.risks.map((r) => (
+            <RiskCard key={r.dimension} risk={r} />
+          ))}
+        </div>
+      )}
 
-      <SectionHeading eyebrow="Overview" title="Risk dimensions" />
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {result.risks.map((r) => {
-          const level = r.level === 'critical' ? 'critical' : r.level;
-          return (
-            <Card key={r.dimension}>
-              <div className="flex items-center justify-between">
-                <h3 className="font-medium text-slate-100">
-                  {DIM_LABEL[r.dimension]} risk
-                </h3>
-                <StatusBadge level={level} label={r.level} />
-              </div>
-              <ul className="mt-2 space-y-1 text-xs text-slate-300">
-                {r.reasons.slice(0, 3).map((rr, i) => (
-                  <li key={i}>· {rr}</li>
-                ))}
-              </ul>
-              <p className="mt-2 text-xs text-slate-500">
-                Confidence {Math.round(r.confidence * 100)}%
-                {r.humanReviewRequired ? ' · human review required' : ''}
-              </p>
-            </Card>
-          );
-        })}
-      </div>
-
-      <SectionHeading eyebrow="Findings" title="Detailed findings" />
-      {result.findings.length === 0 ? (
-        <Card>
-          <p className="text-sm text-slate-300">
-            No findings recorded for this run.
-          </p>
-        </Card>
+      <SectionHeading
+        eyebrow="Deterministic layer"
+        title="Rule findings"
+        description="Coded checks that run before any AI call."
+        actions={<Tag tone="sky">{ruleFindings.length}</Tag>}
+      />
+      {ruleFindings.length === 0 ? (
+        <EmptyState icon={<IconShield />} title="No rule findings">
+          None of the deterministic rules flagged this campaign.
+        </EmptyState>
       ) : (
         <div className="space-y-3">
-          {result.findings.map((f) => (
-            <Card key={f.id}>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <StatusBadge level={severityToLevel(f.severity)} label={f.severity} />
-                    <span className="text-xs uppercase tracking-widest text-slate-400">
-                      {f.category} · {f.producedBy}
-                    </span>
-                    {f.requiresHumanReview ? (
-                      <span className="rounded bg-amber-900 px-1.5 py-0.5 text-xs text-amber-100">
-                        HUMAN REVIEW
-                      </span>
-                    ) : null}
-                  </div>
-                  <h3 className="mt-1 text-base font-medium text-slate-100">
-                    {f.title}
-                  </h3>
-                  <p className="mt-1 text-sm text-slate-300">{f.explanation}</p>
-                  {f.affectedContent ? (
-                    <blockquote className="mt-2 border-l-2 border-slate-700 pl-3 text-sm text-slate-400">
-                      “{f.affectedContent}”
-                    </blockquote>
-                  ) : null}
-                </div>
-                <div className="text-right text-xs text-slate-500">
-                  Conf {Math.round(f.confidence * 100)}%
-                  <br />
-                  Evidence: {f.evidenceStatus}
-                </div>
-              </div>
-              {f.evidence.length > 0 ? (
-                <details className="mt-3">
-                  <summary className="cursor-pointer text-xs text-sky-300 hover:text-sky-200">
-                    Show cited evidence ({f.evidence.length})
-                  </summary>
-                  <ul className="mt-2 space-y-2">
-                    {f.evidence.map((ev) => (
-                      <li
-                        key={ev.id}
-                        className="rounded border border-surface-border bg-black/20 p-2 text-xs text-slate-300"
-                      >
-                        <div className="text-slate-100">{ev.sourceTitle}</div>
-                        <div className="mt-1">{ev.excerpt}</div>
-                        <div className="mt-1 text-slate-500">
-                          type: {ev.sourceType} · rel {Math.round(ev.relevanceScore * 100)}%
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              ) : null}
-            </Card>
+          {ruleFindings.map((f) => (
+            <FindingCard key={f.id} finding={f} />
           ))}
         </div>
       )}
 
-      <SectionHeading eyebrow="Audience perspectives" title="Simulated audience perspectives" />
-      {result.audiencePerspectives.length === 0 ? (
-        <Card>
-          <p className="text-sm text-slate-300">
-            No audience perspective results.
-          </p>
-        </Card>
+      <SectionHeading
+        eyebrow="AI agents"
+        title="Agent findings"
+        description="Compliance and cultural findings may only cite sources retrieved from the policy library."
+        actions={<Tag tone="violet">{agentFindings.length}</Tag>}
+      />
+      {agentFindings.length === 0 ? (
+        <EmptyState icon={<IconSparkles />} title="No agent findings">
+          The AI agents returned no findings for this run.
+        </EmptyState>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-3">
+          {agentFindings.map((f) => (
+            <FindingCard key={f.id} finding={f} />
+          ))}
+        </div>
+      )}
+
+      <SectionHeading
+        eyebrow="Audience perspectives"
+        title="Simulated personas"
+        description="Simulated readings per selected audience segment. These are not survey results."
+      />
+      {result.audiencePerspectives.length === 0 ? (
+        <EmptyState icon={<IconUsers />} title="No audience perspective results" />
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
           {result.audiencePerspectives.map((p) => (
-            <Card key={p.id}>
-              <h3 className="font-medium text-slate-100">
-                {p.audienceSegmentKey}
-              </h3>
-              <p className="mt-1 text-sm text-slate-300">
-                {p.possibleInterpretation}
-              </p>
-              {p.positiveSignals.length > 0 ? (
-                <div className="mt-2">
-                  <div className="text-xs uppercase tracking-widest text-emerald-300">
-                    Positive signals
-                  </div>
-                  <ul className="mt-1 space-y-0.5 text-xs text-slate-300">
-                    {p.positiveSignals.map((s, i) => (
-                      <li key={i}>· {s}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-              {p.concernSignals.length > 0 ? (
-                <div className="mt-2">
-                  <div className="text-xs uppercase tracking-widest text-amber-300">
-                    Concern signals
-                  </div>
-                  <ul className="mt-1 space-y-0.5 text-xs text-slate-300">
-                    {p.concernSignals.map((s, i) => (
-                      <li key={i}>· {s}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
+            <Card key={p.id} className="flex flex-col">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-500/10 text-violet-300">
+                  <IconUsers />
+                </span>
+                <h3 className="text-sm font-semibold text-ink">{p.audienceSegmentKey}</h3>
+              </div>
+              <p className="mt-3 text-sm leading-relaxed text-ink-muted">{p.possibleInterpretation}</p>
+              <div className="mt-4 grid flex-1 gap-3 sm:grid-cols-2">
+                <SignalList title="Positive signals" items={p.positiveSignals} tone="emerald" />
+                <SignalList title="Concern signals" items={p.concernSignals} tone="amber" />
+              </div>
               {p.ambiguity ? (
-                <p className="mt-2 text-xs text-slate-400">
-                  Ambiguity: {p.ambiguity}
+                <p className="mt-3 rounded-lg bg-surface-raised p-2.5 text-xs text-ink-muted">
+                  <span className="font-semibold text-ink">Ambiguity:</span> {p.ambiguity}
                 </p>
               ) : null}
-              <p className="mt-2 text-xs text-slate-500">
-                Confidence {Math.round(p.confidence * 100)}%
-              </p>
+              <div className="mt-4 border-t border-line pt-3">
+                <ConfidenceMeter value={p.confidence} />
+              </div>
             </Card>
           ))}
         </div>
       )}
 
-      <SectionHeading eyebrow="Recommendations" title="Suggested actions" />
+      <SectionHeading
+        eyebrow="Recommendations"
+        title="Suggested actions"
+        description="Each action is tied to a finding."
+      />
       {result.recommendations.length === 0 ? (
-        <Card>
-          <p className="text-sm text-slate-300">
-            No recommendations for this run.
-          </p>
-        </Card>
+        <EmptyState title="No recommendations for this run" />
       ) : (
         <div className="space-y-3">
           {result.recommendations.map((r) => {
             const finding = findingById.get(r.findingId);
             return (
               <Card key={r.id}>
-                <div className="flex items-center gap-2">
-                  <span className="rounded bg-sky-900 px-2 py-0.5 text-xs text-sky-100">
-                    {r.action}
-                  </span>
-                  <span className="text-xs text-slate-400">
-                    for finding: {finding ? finding.title : r.findingId}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Tag tone="brand">{r.action.replace(/_/g, ' ')}</Tag>
+                  <span className="text-xs text-ink-subtle">
+                    for finding: <span className="font-medium text-ink-muted">{finding ? finding.title : r.findingId}</span>
+                    {finding ? ` · ${agentLabel(finding.producedBy)}` : ''}
                   </span>
                 </div>
-                <p className="mt-2 text-sm text-slate-200">{r.reason}</p>
-                {r.originalContent ? (
-                  <p className="mt-2 text-xs text-slate-400">
-                    Original: “{r.originalContent}”
-                  </p>
-                ) : null}
-                {r.suggestedModification ? (
-                  <p className="mt-1 text-xs text-emerald-200">
-                    Suggested: “{r.suggestedModification}”
-                  </p>
+                <p className="mt-2 text-sm leading-relaxed text-ink">{r.reason}</p>
+                {r.originalContent || r.suggestedModification ? (
+                  <div className="mt-3 grid gap-2 md:grid-cols-2">
+                    {r.originalContent ? (
+                      <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-rose-300">Original</p>
+                        <p className="mt-1 text-slate-300">“{r.originalContent}”</p>
+                      </div>
+                    ) : null}
+                    {r.suggestedModification ? (
+                      <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-300">Suggested</p>
+                        <p className="mt-1 text-slate-300">“{r.suggestedModification}”</p>
+                      </div>
+                    ) : null}
+                  </div>
                 ) : null}
               </Card>
             );
@@ -265,6 +256,24 @@ export default async function AnalysisPage(
   );
 }
 
-function severityToLevel(s: types.Severity): 'critical' | 'high' | 'medium' | 'low' | 'info' {
-  return s === 'critical' ? 'critical' : s === 'high' ? 'high' : s === 'medium' ? 'medium' : s === 'low' ? 'low' : 'info';
+function SignalList({ title, items, tone }: { title: string; items: string[]; tone: 'emerald' | 'amber' }) {
+  const color = tone === 'emerald' ? 'text-emerald-300' : 'text-amber-300';
+  const dot = tone === 'emerald' ? 'bg-emerald-500' : 'bg-amber-500';
+  return (
+    <div>
+      <p className={`text-[11px] font-semibold uppercase tracking-wider ${color}`}>{title}</p>
+      {items.length === 0 ? (
+        <p className="mt-1 text-xs text-ink-subtle">None</p>
+      ) : (
+        <ul className="mt-1.5 space-y-1 text-sm text-ink-muted">
+          {items.map((s, i) => (
+            <li key={i} className="flex gap-2">
+              <span className={`mt-2 h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} />
+              <span>{s}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }

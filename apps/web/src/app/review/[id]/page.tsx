@@ -4,7 +4,10 @@ import { notFound } from 'next/navigation';
 import { analyses, campaigns, humanReview } from '@guardrail/core';
 
 import { AppShell } from '@/components/app-shell';
-import { Card, SectionHeading, StatusBadge } from '@/components/ui';
+import { FindingCard } from '@/components/finding-card';
+import { IconArrowLeft, IconArrowRight } from '@/components/icons';
+import { RiskCard } from '@/components/risk-card';
+import { Card, EmptyState, PageHeader, SectionHeading, StatusBadge } from '@/components/ui';
 import { ReviewActions } from '@/components/review-actions';
 
 export const dynamic = 'force-dynamic';
@@ -24,100 +27,92 @@ export default async function ReviewDetailPage(
   const analysis = review.analysisRunId
     ? await analyses.getAnalysisRun(review.analysisRunId)
     : await analyses.getLatestAnalysisRunForCampaign(review.campaignId);
+  const reviewFindings = (analysis?.findings ?? []).filter((f) => f.requiresHumanReview);
 
   return (
     <AppShell>
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <SectionHeading
-          eyebrow={`Review · ${review.status}`}
-          title={campaign.name}
-          description={`Opened ${new Date(review.createdAt).toLocaleString()} by ${review.reviewerName ?? review.reviewerId}`}
-        />
-        <Link href="/review" className="text-sm text-slate-300 hover:text-slate-100">
-          ← Back to queue
-        </Link>
-      </div>
+      <Link href="/review" className="mb-4 inline-flex items-center gap-1.5 text-sm text-ink-subtle hover:text-ink">
+        <IconArrowLeft width={16} height={16} /> Back to queue
+      </Link>
+      <PageHeader
+        eyebrow={`Review · ${review.status}`}
+        title={
+          <span className="flex flex-wrap items-center gap-3">
+            {campaign.name}
+            <StatusBadge
+              level={review.status === 'pending' ? 'high' : review.status === 'approved' ? 'low' : review.status === 'rejected' ? 'critical' : 'medium'}
+              label={review.status}
+            />
+          </span>
+        }
+        description={`Opened ${new Date(review.createdAt).toLocaleString()} by ${review.reviewerName ?? review.reviewerId}`}
+        actions={
+          analysis ? (
+            <Link href={`/campaigns/${campaign.id}/analysis/${analysis.runId}`} className="btn btn-secondary">
+              Full analysis <IconArrowRight width={16} height={16} />
+            </Link>
+          ) : null
+        }
+      />
 
-      <Card className="mb-4">
-        <h2 className="text-sm uppercase tracking-widest text-slate-400">Copy</h2>
-        <p className="mt-2 whitespace-pre-wrap text-sm text-slate-100">{campaign.copy}</p>
-      </Card>
-
-      <SectionHeading eyebrow="Risk overview" title="Risk dimensions" />
-      {analysis ? (
-        <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {analysis.risks.map((r) => (
-            <Card key={r.dimension}>
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium text-slate-100">{r.dimension}</h3>
-                <StatusBadge
-                  level={r.level === 'critical' ? 'critical' : (r.level as never)}
-                  label={r.level}
-                />
-              </div>
-              <p className="mt-2 text-xs text-slate-400">
-                {r.reasons.slice(0, 2).join(' · ')}
-              </p>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <Card className="mb-4">
-          <p className="text-sm text-slate-300">
-            This campaign has no completed analysis yet.
-          </p>
-        </Card>
-      )}
-
-      <SectionHeading eyebrow="Findings" title="Findings requiring human review" />
-      <div className="mb-4 space-y-3">
-        {(analysis?.findings ?? [])
-          .filter((f) => f.requiresHumanReview)
-          .map((f) => (
-            <Card key={f.id}>
-              <div className="flex items-center gap-2">
-                <StatusBadge level={f.severity === 'info' ? 'info' : (f.severity as never)} label={f.severity} />
-                <span className="text-xs uppercase tracking-widest text-slate-400">
-                  {f.category}
-                </span>
-              </div>
-              <h3 className="mt-1 font-medium text-slate-100">{f.title}</h3>
-              <p className="mt-1 text-sm text-slate-300">{f.explanation}</p>
-              {f.affectedContent ? (
-                <blockquote className="mt-2 border-l-2 border-slate-700 pl-3 text-sm text-slate-400">
-                  “{f.affectedContent}”
-                </blockquote>
-              ) : null}
-              <p className="mt-2 text-xs text-slate-500">
-                Evidence status: {f.evidenceStatus} · Confidence {Math.round(f.confidence * 100)}%
-              </p>
-            </Card>
-          ))}
-        {analysis && !analysis.findings.some((f) => f.requiresHumanReview) ? (
+      <div className="grid gap-8 lg:grid-cols-3">
+        <div className="lg:col-span-2">
           <Card>
-            <p className="text-sm text-slate-300">
-              No findings explicitly required human review. Reviewer can still
-              approve, reject or request changes below.
-            </p>
+            <p className="eyebrow">Campaign copy</p>
+            <p className="mt-3 whitespace-pre-wrap text-[15px] leading-relaxed text-ink">{campaign.copy}</p>
           </Card>
-        ) : null}
-      </div>
 
-      {review.status === 'pending' ? (
-        <ReviewActions reviewId={review.id} campaignId={campaign.id} />
-      ) : (
-        <Card>
-          <p className="text-sm text-slate-300">
-            This review is <strong>{review.status}</strong>.
-          </p>
-          {review.decision ? (
-            <p className="mt-2 text-sm text-slate-400">Decision: {review.decision}</p>
-          ) : null}
-          {review.comments ? (
-            <p className="mt-2 text-sm text-slate-400">Comments: {review.comments}</p>
-          ) : null}
-        </Card>
-      )}
+          <SectionHeading eyebrow="Risk overview" title="Risk dimensions" />
+          {analysis ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {analysis.risks.map((r) => (
+                <RiskCard key={r.dimension} risk={r} maxReasons={2} />
+              ))}
+            </div>
+          ) : (
+            <EmptyState title="No completed analysis yet">
+              This campaign has no completed analysis yet.
+            </EmptyState>
+          )}
+
+          <SectionHeading eyebrow="Findings" title="Findings requiring human review" />
+          <div className="space-y-3">
+            {reviewFindings.map((f) => (
+              <FindingCard key={f.id} finding={f} />
+            ))}
+            {analysis && reviewFindings.length === 0 ? (
+              <EmptyState title="No findings explicitly required review">
+                You can still approve, reject or request changes.
+              </EmptyState>
+            ) : null}
+          </div>
+        </div>
+
+        <div>
+          <div className="lg:sticky lg:top-8">
+            {review.status === 'pending' ? (
+              <ReviewActions reviewId={review.id} campaignId={campaign.id} />
+            ) : (
+              <Card>
+                <p className="eyebrow">Outcome</p>
+                <p className="mt-2 text-sm text-ink">
+                  This review is <strong className="capitalize">{review.status.replace(/_/g, ' ')}</strong>.
+                </p>
+                {review.decision ? (
+                  <p className="mt-3 text-sm text-ink-muted">
+                    <span className="font-medium text-ink">Decision:</span> {review.decision}
+                  </p>
+                ) : null}
+                {review.comments ? (
+                  <p className="mt-2 text-sm text-ink-muted">
+                    <span className="font-medium text-ink">Comments:</span> {review.comments}
+                  </p>
+                ) : null}
+              </Card>
+            )}
+          </div>
+        </div>
+      </div>
     </AppShell>
   );
 }

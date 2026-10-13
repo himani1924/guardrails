@@ -3,6 +3,9 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import { IconCheck } from './icons';
+import { Spinner } from './spinner';
+
 export function AcceptCampaignButton({ campaignId }: { campaignId: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -34,11 +37,12 @@ export function AcceptCampaignButton({ campaignId }: { campaignId: string }) {
         type="button"
         onClick={accept}
         disabled={busy}
-        className="rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-60"
+        className="btn btn-success"
       >
-        {busy ? 'Accepting…' : 'Accept'}
+        {busy ? <Spinner /> : <IconCheck width={16} height={16} />}
+        {busy ? 'Accepting…' : 'Accept campaign'}
       </button>
-      {error ? <span className="text-xs text-red-300">{error}</span> : null}
+      {error ? <span role="alert" className="max-w-xs text-right text-xs text-rose-600">{error}</span> : null}
     </div>
   );
 }

@@ -3,6 +3,9 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import { IconInbox } from './icons';
+import { Spinner } from './spinner';
+
 export function SendToReviewButton({
   campaignId,
   analysisRunId,
@@ -44,11 +47,12 @@ export function SendToReviewButton({
         type="button"
         onClick={send}
         disabled={busy}
-        className="rounded bg-amber-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-60"
+        className="btn btn-warning"
       >
+        {busy ? <Spinner /> : <IconInbox width={16} height={16} />}
         {busy ? 'Sending…' : 'Send to review'}
       </button>
-      {error ? <span className="text-xs text-red-300">{error}</span> : null}
+      {error ? <span role="alert" className="max-w-xs text-right text-xs text-rose-600">{error}</span> : null}
     </div>
   );
 }

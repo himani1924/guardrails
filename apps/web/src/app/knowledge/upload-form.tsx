@@ -3,7 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-import { Card } from '@/components/ui';
+import { Spinner } from '@/components/spinner';
+import { Alert, Card } from '@/components/ui';
 
 const SOURCE_TYPES = [
   'internal_policy',
@@ -70,24 +71,20 @@ export function KnowledgeUploadForm() {
 
   return (
     <Card>
-      <h2 className="text-lg font-medium text-slate-50">Upload policy / compliance document</h2>
-      <p className="mt-1 text-sm text-slate-400">
+      <h2 className="text-base font-semibold text-ink">Upload policy / compliance document</h2>
+      <p className="mt-1 text-sm text-ink-muted">
         Paste text or choose a .txt / .md file. It is chunked, embedded, and becomes available to the
         analysis agents.
       </p>
-      <form onSubmit={submit} className="mt-4 space-y-3">
+      <form onSubmit={submit} className="mt-5 space-y-4">
         {error ? (
-          <div className="rounded border border-red-800 bg-red-950/40 p-2 text-sm text-red-100">
+          <Alert tone="error" title="Upload failed">
             {error}
-          </div>
+          </Alert>
         ) : null}
-        {ok ? (
-          <div className="rounded border border-emerald-800 bg-emerald-950/40 p-2 text-sm text-emerald-100">
-            {ok}
-          </div>
-        ) : null}
-        <label className="block text-sm">
-          <span className="mb-1 block text-slate-300">Title</span>
+        {ok ? <Alert tone="success">{ok}</Alert> : null}
+        <label className="block">
+          <span className="field-label">Title</span>
           <input
             className="input"
             value={title}
@@ -96,9 +93,9 @@ export function KnowledgeUploadForm() {
             minLength={3}
           />
         </label>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-300">Source type</span>
+        <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
+          <label className="block">
+            <span className="field-label">Source type</span>
             <select
               className="input"
               value={sourceType}
@@ -111,8 +108,8 @@ export function KnowledgeUploadForm() {
               ))}
             </select>
           </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-300">Category key</span>
+          <label className="block">
+            <span className="field-label">Category key</span>
             <input
               className="input"
               value={category}
@@ -120,8 +117,8 @@ export function KnowledgeUploadForm() {
               placeholder="wagering_advertising"
             />
           </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-300">Geography</span>
+          <label className="block">
+            <span className="field-label">Geography</span>
             <input
               className="input"
               value={geography}
@@ -130,19 +127,19 @@ export function KnowledgeUploadForm() {
             />
           </label>
         </div>
-        <label className="block text-sm">
-          <span className="mb-1 block text-slate-300">Upload file (.txt / .md)</span>
+        <label className="block">
+          <span className="field-label">Upload file (.txt / .md)</span>
           <input
             type="file"
             accept=".txt,.md,text/plain,text/markdown"
             onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
-            className="block w-full text-sm text-slate-300"
+            className="block w-full cursor-pointer rounded-lg border border-dashed border-slate-700 bg-surface-raised p-3 text-sm text-ink-muted file:mr-3 file:rounded-md file:border-0 file:bg-brand-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-brand-700"
           />
         </label>
-        <label className="block text-sm">
-          <span className="mb-1 block text-slate-300">Document content</span>
+        <label className="block">
+          <span className="field-label">Document content</span>
           <textarea
-            className="input font-mono"
+            className="input font-mono text-[13px]"
             rows={10}
             value={content}
             onChange={(e) => setContent(e.target.value)}
@@ -151,27 +148,14 @@ export function KnowledgeUploadForm() {
             placeholder="Paste policy / compliance / sentiment guidance here…"
           />
         </label>
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
-          >
+        <div className="flex items-center justify-between gap-3 border-t border-line pt-4">
+          <span className="text-xs text-ink-subtle">Chunked (~800 chars) and embedded on save.</span>
+          <button type="submit" disabled={busy} className="btn btn-primary">
+            {busy ? <Spinner /> : null}
             {busy ? 'Ingesting…' : 'Save to knowledge base'}
           </button>
         </div>
       </form>
-      <style jsx>{`
-        .input {
-          width: 100%;
-          border-radius: 6px;
-          border: 1px solid rgb(31 41 55);
-          background: rgb(17 24 39);
-          padding: 0.5rem 0.75rem;
-          color: rgb(241 245 249);
-          font-size: 0.875rem;
-        }
-      `}</style>
     </Card>
   );
 }

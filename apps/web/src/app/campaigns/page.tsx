@@ -3,88 +3,65 @@ import Link from 'next/link';
 import { campaigns } from '@guardrail/core';
 
 import { AppShell } from '@/components/app-shell';
-import { Card, SectionHeading, StatusBadge } from '@/components/ui';
+import { IconArrowRight, IconMegaphone, IconPlus } from '@/components/icons';
+import { EmptyState, PageHeader, StatusBadge, Tag, campaignStatus } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
-
-const STATUS_LABEL: Record<string, { level: 'critical' | 'high' | 'medium' | 'low' | 'unknown' | 'info'; label: string }> = {
-  draft: { level: 'info', label: 'Draft' },
-  ready_for_analysis: { level: 'info', label: 'Ready' },
-  analyzing: { level: 'medium', label: 'Analyzing' },
-  analyzed: { level: 'low', label: 'Analyzed' },
-  in_review: { level: 'high', label: 'In review' },
-  approved: { level: 'low', label: 'Approved' },
-  rejected: { level: 'critical', label: 'Rejected' },
-};
 
 export default async function CampaignsPage() {
   const list = await campaigns.listCampaigns();
   return (
     <AppShell>
-      <div className="mb-6 flex items-end justify-between">
-        <SectionHeading
-          eyebrow="Campaigns"
-          title="All campaigns"
-          description={`${list.length} campaign${list.length === 1 ? '' : 's'} in the system.`}
-        />
-        <Link
-          href="/campaigns/new"
-          className="rounded bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500"
-        >
-          New campaign
-        </Link>
-      </div>
+      <PageHeader
+        eyebrow="Campaigns"
+        title="All campaigns"
+        description={`${list.length} campaign${list.length === 1 ? '' : 's'} in the system.`}
+        actions={
+          <Link href="/campaigns/new" className="btn btn-primary">
+            <IconPlus width={16} height={16} /> New campaign
+          </Link>
+        }
+      />
 
       {list.length === 0 ? (
-        <Card>
-          <p className="text-sm text-slate-300">
-            No campaigns yet.{' '}
-            <Link href="/campaigns/new" className="text-sky-300 underline">
-              Create the first one
+        <EmptyState
+          icon={<IconMegaphone />}
+          title="No campaigns yet"
+          action={
+            <Link href="/campaigns/new" className="btn btn-primary">
+              <IconPlus width={16} height={16} /> Create the first one
             </Link>
-            .
-          </p>
-        </Card>
+          }
+        >
+          Draft a campaign to run rules and AI checks before it goes live.
+        </EmptyState>
       ) : (
-        <div className="space-y-3">
+        <div className="grid gap-4 md:grid-cols-2">
           {list.map((c) => {
-            const status = STATUS_LABEL[c.status] ?? STATUS_LABEL.draft!;
+            const status = campaignStatus(c.status);
             return (
-              <Card key={c.id}>
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <Link
-                      href={`/campaigns/${c.id}`}
-                      className="text-lg font-medium text-slate-50 hover:text-sky-300"
-                    >
-                      {c.name}
-                    </Link>
-                    <p className="mt-1 text-sm text-slate-300 line-clamp-2">{c.copy}</p>
-                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-400">
-                      <span>{c.campaignType}</span>
-                      <span>·</span>
-                      <span>{c.platform}</span>
-                      <span>·</span>
-                      <span>{c.geography.country}</span>
-                      {c.festivalContext ? (
-                        <>
-                          <span>·</span>
-                          <span>{c.festivalContext.name}</span>
-                        </>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <StatusBadge level={status.level} label={status.label} />
-                    <Link
-                      href={`/campaigns/${c.id}`}
-                      className="text-xs text-slate-400 hover:text-slate-200"
-                    >
-                      View →
-                    </Link>
-                  </div>
+              <Link
+                key={c.id}
+                href={`/campaigns/${c.id}`}
+                className="group flex flex-col rounded-xl border border-line bg-surface p-5 shadow-card transition hover:-translate-y-0.5 hover:border-brand-500/50 hover:shadow-md"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <h2 className="text-base font-semibold text-ink group-hover:text-brand-200">
+                    {c.name}
+                  </h2>
+                  <StatusBadge level={status.level} label={status.label} />
                 </div>
-              </Card>
+                <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-ink-muted">{c.copy}</p>
+                <div className="mt-4 flex flex-wrap items-center gap-1.5">
+                  <Tag tone="brand">{c.campaignType.replace(/_/g, ' ')}</Tag>
+                  <Tag>{c.platform}</Tag>
+                  <Tag>{c.geography.country}</Tag>
+                  {c.festivalContext ? <Tag tone="amber">{c.festivalContext.name}</Tag> : null}
+                  <span className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-ink-subtle group-hover:text-brand-200">
+                    View <IconArrowRight width={14} height={14} />
+                  </span>
+                </div>
+              </Link>
             );
           })}
         </div>
