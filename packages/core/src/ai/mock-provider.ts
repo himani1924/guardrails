@@ -98,9 +98,6 @@ export class MockLLMProvider implements LLMProvider {
     }
     if (candidate === undefined) {
       candidate = defaultForSchema(req.schema, req.schemaName);
-      // #region agent log
-      fetch('http://127.0.0.1:7322/ingest/363266d2-671e-41b8-8614-9660cd345a57',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0685fc'},body:JSON.stringify({sessionId:'0685fc',runId:'post-fix',hypothesisId:'F',location:'packages/core/src/ai/mock-provider.ts:completeStructured',message:'mock using schema default',data:{schemaName:req.schemaName},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
     }
 
     const parsed = req.schema.safeParse(candidate);

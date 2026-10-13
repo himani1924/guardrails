@@ -27,14 +27,7 @@ export function getLLMProvider(): LLMProvider {
       break;
     case 'mock':
     default: {
-      try {
-        log.info('llm_provider_mock');
-      } catch (err) {
-        // #region agent log
-        fetch('http://127.0.0.1:7322/ingest/363266d2-671e-41b8-8614-9660cd345a57',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0685fc'},body:JSON.stringify({sessionId:'0685fc',runId:'pre-fix',hypothesisId:'C',location:'packages/core/src/ai/factory.ts:getLLMProvider',message:'log.info threw in getLLMProvider',data:{errorMessage:err instanceof Error ? err.message : String(err),provider:cfg.LLM_PROVIDER},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-        throw err;
-      }
+      log.info('llm_provider_mock');
       const mock = new MockLLMProvider();
       programDemoFixtures(mock);
       llmSingleton = mock;
