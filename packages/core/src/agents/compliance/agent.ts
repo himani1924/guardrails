@@ -13,6 +13,12 @@ import {
 import type { CampaignContext } from '../../types/campaign';
 import type { Evidence } from '../../types/evidence';
 import type { Finding } from '../../types/finding';
+import {
+  formatImagesForPrompt,
+  retrievalText,
+  sourceImageField,
+  validImageIndex,
+} from '../../images/extraction';
 
 const log = getLogger({ component: 'agents.compliance' });
 
@@ -32,6 +38,7 @@ const complianceOutputSchema = z.object({
         evidenceStatus: z.enum(EVIDENCE_STATUSES),
         suggestedAction: z.string().max(1000).optional(),
         citedSourceIds: z.array(z.string()).max(10).default([]),
+        sourceImage: sourceImageField,
       }),
     )
     .max(20)
@@ -68,7 +75,7 @@ export async function runComplianceAgent(
   input: ComplianceAgentInput,
 ): Promise<ComplianceAgentOutput> {
   const evidenceChunks = await retrieve({
-    query: `${input.campaign.name}\n${input.campaign.copy}`,
+    query: `${input.campaign.name}\n${retrievalText(input.campaign)}`,
     topK: input.topK ?? 6,
     filter: {
       sourceType: [
@@ -142,6 +149,7 @@ export async function runComplianceAgent(
       evidenceStatus,
       evidence,
       suggestedAction: f.suggestedAction,
+      sourceImageIndex: validImageIndex(input.campaign, f.sourceImage),
       createdAt: new Date().toISOString(),
     };
   });
@@ -175,14 +183,14 @@ applicablePolicyContext: ${ctx.applicablePolicyContext.join(', ') || 'none'}
 CAMPAIGN COPY
 """
 ${ctx.copy}
-"""
+"""${formatImagesForPrompt(ctx)}
 
 AVAILABLE EVIDENCE
 ${ev}
 
 TASK
 Return a JSON object of shape:
-{ "findings": [ { category, severity, title, explanation, affectedContent, confidence, uncertainty, requiresHumanReview, evidenceRequired, evidenceStatus, suggestedAction, citedSourceIds } ] }
+{ "findings": [ { category, severity, title, explanation, affectedContent, confidence, uncertainty, requiresHumanReview, evidenceRequired, evidenceStatus, suggestedAction, citedSourceIds, sourceImage? } ] }
 
 Cite sources ONLY from AVAILABLE EVIDENCE. If nothing above supports or contradicts the claim, do not fabricate — use evidenceStatus NOT_FOUND or REQUIRES_HUMAN_REVIEW.`;
 }

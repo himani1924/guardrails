@@ -2,14 +2,15 @@ import { getLogger } from '../logging';
 import { closeDb } from '../db/client';
 
 import { DEMO_KB } from './demo-kb';
-import { ingestDocument } from './ingest';
+import { ingestDocumentWithStatus } from './ingest';
 
 const log = getLogger({ component: 'knowledge.ingest-cli' });
 
 async function main(): Promise<void> {
   log.info({ count: DEMO_KB.length }, 'ingesting_demo_kb');
   for (const doc of DEMO_KB) {
-    await ingestDocument(doc);
+    const { status } = await ingestDocumentWithStatus(doc);
+    log.info({ title: doc.title, status }, 'demo_kb_document');
   }
   log.info('demo_kb_ingested');
 }

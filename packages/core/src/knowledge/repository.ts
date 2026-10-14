@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 
 import { getDb } from '../db/client';
 import { knowledgeChunks, knowledgeDocuments } from '../db/schema';
@@ -16,6 +16,38 @@ export async function upsertDocument(doc: NewKnowledgeDocumentRow): Promise<Know
     .returning();
   if (!inserted) throw new Error('Failed to insert knowledge document');
   return inserted;
+}
+
+/**
+ * Existing documents with the same title + source type (newest first), and
+ * whether each one's content is byte-identical to `content` (md5 in SQL, so
+ * rows ingested before de-duplication existed are matched too).
+ */
+export async function findDocumentsByTitle(
+  title: string,
+  sourceType: NewKnowledgeDocumentRow['sourceType'],
+  content: string,
+): Promise<Array<{ id: string; sameContent: boolean }>> {
+  const db = getDb();
+  return db
+    .select({
+      id: knowledgeDocuments.id,
+      sameContent: sql<boolean>`md5(${knowledgeDocuments.content}) = md5(${content})`,
+    })
+    .from(knowledgeDocuments)
+    .where(and(eq(knowledgeDocuments.title, title), eq(knowledgeDocuments.sourceType, sourceType)))
+    .orderBy(desc(knowledgeDocuments.createdAt));
+}
+
+export async function updateDocument(
+  id: string,
+  patch: Partial<NewKnowledgeDocumentRow>,
+): Promise<void> {
+  const db = getDb();
+  await db
+    .update(knowledgeDocuments)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(eq(knowledgeDocuments.id, id));
 }
 
 export async function replaceChunks(

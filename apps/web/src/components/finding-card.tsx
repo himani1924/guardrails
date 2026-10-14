@@ -43,6 +43,7 @@ export function FindingCard({
         <StatusBadge level={level} label={f.severity} />
         <Tag>{f.category.replace(/_/g, ' ')}</Tag>
         <Tag tone={f.producedBy === 'rule_engine' ? 'sky' : 'violet'}>{agentLabel(f.producedBy)}</Tag>
+        {f.sourceImageIndex ? <Tag tone="brand">Image {f.sourceImageIndex}</Tag> : null}
         {f.requiresHumanReview ? <Tag tone="amber">Human review</Tag> : null}
       </div>
       <h3 className="mt-3 text-base font-semibold text-ink">{f.title}</h3>

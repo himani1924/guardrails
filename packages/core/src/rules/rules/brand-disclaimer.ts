@@ -10,7 +10,7 @@ export const brandDisclaimerRule: Rule = {
 
   evaluate(ctx, runId) {
     const has = /celebrate\s+responsibly|responsible\s+celebration|responsibly\b/i.test(
-      ctx.copy,
+      ctx.combinedText ?? ctx.copy,
     );
     if (has) return [];
     return [

@@ -1,6 +1,7 @@
 import {
   boolean,
   index,
+  integer,
   jsonb,
   numeric,
   pgTable,
@@ -43,6 +44,8 @@ export const findings = pgTable(
     evidenceStatus: evidenceStatusEnum('evidence_status').notNull(),
     suggestedAction: text('suggested_action'),
     ruleId: varchar('rule_id', { length: 100 }),
+    /** 1-based image number when the finding comes from a campaign image. */
+    sourceImageIndex: integer('source_image_index'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

@@ -6,3 +6,4 @@ export * from './risk';
 export * from './recommendation';
 export * from './audience';
 export * from './analysis';
+export * from './image';

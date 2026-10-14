@@ -8,7 +8,16 @@ import {
   runSentimentAgent,
 } from '../agents';
 import { recordAuditEvent } from '../audit/service';
-import { getCampaignById, updateCampaignStatus } from '../campaigns/repository';
+import {
+  getCampaignById,
+  listCampaignImages,
+  updateCampaignStatus,
+} from '../campaigns/repository';
+import {
+  combinedCampaignText,
+  extractImages,
+  imageFailureFindings,
+} from '../images/extraction';
 import { getLogger } from '../logging';
 import { runRuleEngine } from '../rules/engine';
 import type { CampaignContext } from '../types/campaign';
@@ -39,7 +48,8 @@ export interface RunAnalysisResult {
  * Runs the full analysis pipeline as a deterministic workflow.
  *
  * Order:
- *   1. Rule engine (deterministic)
+ *   0. Image extraction (vision: OCR + description per uploaded image)
+ *   1. Rule engine (over copy + image text) (deterministic)
  *   2. Compliance Agent (RAG)
  *   3. Sentiment Agent
  *   4. Cultural Context Agent (RAG) — only if applicable
@@ -83,6 +93,24 @@ export async function runAnalysis(input: RunAnalysisInput): Promise<RunAnalysisR
   };
 
   try {
+    // 0. Image extraction. Only images with stored bytes are analysed; URL-only
+    // "reference" image assets carry no pixels to read.
+    const uploaded = (await listCampaignImages(campaign.id)).filter(
+      (i): i is typeof i & { data: Buffer } => i.data !== null,
+    );
+    const images =
+      uploaded.length === 0
+        ? []
+        : await runAgentWithAudit('image_extraction', analysisRunId, () =>
+            extractImages({ analysisRunId, images: uploaded, llm }),
+          );
+    ctx.images = images;
+    ctx.combinedText = combinedCampaignText(ctx.copy, images);
+    const imageFailures = imageFailureFindings(images, analysisRunId);
+    if (imageFailures.length > 0) {
+      log.warn({ analysisRunId, failed: imageFailures.length }, 'image_extraction_partial_failure');
+    }
+
     const rules = runRuleEngine(ctx, analysisRunId);
     await recordAuditEvent({
       actor: { kind: 'agent', agent: 'rule_engine' },
@@ -114,6 +142,7 @@ export async function runAnalysis(input: RunAnalysisInput): Promise<RunAnalysisR
     );
 
     const allFindings = [
+      ...imageFailures,
       ...rules.findings,
       ...compliance.findings,
       ...sentiment.findings,
@@ -143,6 +172,7 @@ export async function runAnalysis(input: RunAnalysisInput): Promise<RunAnalysisR
       risks,
       recommendations: withFallback,
       perspectives: audience.perspectives ?? [],
+      images,
     });
 
     const requiresReview = risks.some((r) => r.humanReviewRequired);

@@ -9,7 +9,7 @@ export const influencerDisclosureRule: Rule = {
   applicableWhen: (ctx) => ctx.campaignType === 'influencer',
 
   evaluate(ctx, runId) {
-    const has = /#ad\b|#sponsored\b|#paidpartnership\b|#partner\b/i.test(ctx.copy);
+    const has = /#ad\b|#sponsored\b|#paidpartnership\b|#partner\b/i.test(ctx.combinedText ?? ctx.copy);
     if (has) return [];
     return [
       buildFinding(this, runId, {

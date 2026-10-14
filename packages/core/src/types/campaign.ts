@@ -1,3 +1,4 @@
+import type { ImageExtraction } from './image';
 import type {
   AssetType,
   CampaignStatus,
@@ -31,6 +32,11 @@ export interface CampaignAsset {
   url?: string;
   storagePath?: string;
   mimeType?: string;
+  /** Size of the stored image bytes (image assets uploaded through the form). */
+  byteSize?: number;
+  /** True when binary image data is stored for this asset. */
+  hasFile?: boolean;
+  sortOrder?: number;
   createdAt: string;
 }
 
@@ -70,4 +76,12 @@ export interface CampaignContext {
   audienceSegmentKeys: string[];
   assets: CampaignAsset[];
   applicablePolicyContext: string[];
+  /** Per-image OCR + description from the image-extraction step (if any). */
+  images?: ImageExtraction[];
+  /**
+   * Copy plus the OCR text of every image. Rules that check for the ABSENCE of
+   * something (disclaimers, #ad, responsible-celebration line) read this so a
+   * marker in either the copy or an image satisfies them.
+   */
+  combinedText?: string;
 }

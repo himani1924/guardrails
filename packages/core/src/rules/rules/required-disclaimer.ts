@@ -27,7 +27,7 @@ export const requiredDisclaimerRule: Rule = {
   },
 
   evaluate(ctx, runId) {
-    const haystack = ctx.copy.toLowerCase();
+    const haystack = (ctx.combinedText ?? ctx.copy).toLowerCase();
     if (DISCLAIMER_MARKERS.some((m) => haystack.includes(m))) return [];
     return [
       buildFinding(this, runId, {

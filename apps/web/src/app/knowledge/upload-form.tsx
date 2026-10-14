@@ -58,7 +58,13 @@ export function KnowledgeUploadForm() {
       if (!res.ok) {
         throw new Error(body?.error?.message ?? 'Upload failed');
       }
-      setOk('Document ingested and embedded for retrieval.');
+      setOk(
+        body?.status === 'unchanged'
+          ? 'This document is already in the knowledge base (same title, type and content); no copy was added.'
+          : body?.status === 'updated'
+            ? 'Existing document with this title and type was updated and re-embedded.'
+            : 'Document ingested and embedded for retrieval.',
+      );
       setContent('');
       setTitle('');
       router.refresh();

@@ -1,8 +1,9 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, notInArray } from 'drizzle-orm';
 
 import { getDb } from '../db/client';
 import {
   audienceSegments,
+  campaignAssetFiles,
   campaignAssets,
   campaignAudienceSegments,
   campaigns,
@@ -11,11 +12,35 @@ import { NotFoundError, ValidationError } from '../errors';
 import type { Campaign, CampaignAsset } from '../types/campaign';
 import type { CampaignStatus } from '../types/enums';
 
-import type { CreateCampaignInput, UpdateCampaignInput } from './schemas';
+import type { CampaignAssetInput, CreateCampaignInput, UpdateCampaignInput } from './schemas';
+
+type AssetRow = typeof campaignAssets.$inferSelect & { byteSize?: number | null };
+
+/** Asset rows (with stored-file size, never the bytes) in display order. */
+function assetQuery(db: ReturnType<typeof getDb>) {
+  return db
+    .select({
+      id: campaignAssets.id,
+      campaignId: campaignAssets.campaignId,
+      type: campaignAssets.type,
+      title: campaignAssets.title,
+      description: campaignAssets.description,
+      url: campaignAssets.url,
+      storagePath: campaignAssets.storagePath,
+      mimeType: campaignAssets.mimeType,
+      sortOrder: campaignAssets.sortOrder,
+      createdAt: campaignAssets.createdAt,
+      byteSize: campaignAssetFiles.byteSize,
+    })
+    .from(campaignAssets)
+    .leftJoin(campaignAssetFiles, eq(campaignAssetFiles.assetId, campaignAssets.id));
+}
+
+const assetOrder = [asc(campaignAssets.sortOrder), asc(campaignAssets.createdAt), asc(campaignAssets.id)];
 
 function toCampaign(
   row: typeof campaigns.$inferSelect,
-  assets: (typeof campaignAssets.$inferSelect)[],
+  assets: AssetRow[],
   segmentKeys: string[],
 ): Campaign {
   return {
@@ -37,7 +62,7 @@ function toCampaign(
   };
 }
 
-function toCampaignAsset(row: typeof campaignAssets.$inferSelect): CampaignAsset {
+function toCampaignAsset(row: AssetRow): CampaignAsset {
   return {
     id: row.id,
     campaignId: row.campaignId,
@@ -47,6 +72,9 @@ function toCampaignAsset(row: typeof campaignAssets.$inferSelect): CampaignAsset
     url: row.url ?? undefined,
     storagePath: row.storagePath ?? undefined,
     mimeType: row.mimeType ?? undefined,
+    byteSize: row.byteSize ?? undefined,
+    hasFile: row.byteSize != null,
+    sortOrder: row.sortOrder,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -78,7 +106,7 @@ export async function listCampaigns(options?: {
 
   const ids = rows.map((r) => r.id);
   const [assetRows, linkRows] = await Promise.all([
-    db.select().from(campaignAssets).where(inArray(campaignAssets.campaignId, ids)),
+    assetQuery(db).where(inArray(campaignAssets.campaignId, ids)).orderBy(...assetOrder),
     db
       .select({
         campaignId: campaignAudienceSegments.campaignId,
@@ -92,7 +120,7 @@ export async function listCampaigns(options?: {
       .where(inArray(campaignAudienceSegments.campaignId, ids)),
   ]);
 
-  const assetsByCampaign = new Map<string, (typeof campaignAssets.$inferSelect)[]>();
+  const assetsByCampaign = new Map<string, AssetRow[]>();
   for (const a of assetRows) {
     const list = assetsByCampaign.get(a.campaignId) ?? [];
     list.push(a);
@@ -116,7 +144,7 @@ export async function getCampaignById(id: string): Promise<Campaign> {
   if (!row) throw new NotFoundError('Campaign not found', { id });
 
   const [assetRows, linkRows] = await Promise.all([
-    db.select().from(campaignAssets).where(eq(campaignAssets.campaignId, id)),
+    assetQuery(db).where(eq(campaignAssets.campaignId, id)).orderBy(...assetOrder),
     db
       .select({ key: audienceSegments.key })
       .from(campaignAudienceSegments)
@@ -154,19 +182,7 @@ export async function createCampaign(input: CreateCampaignInput): Promise<Campai
       .returning({ id: campaigns.id });
     if (!inserted) throw new Error('Failed to insert campaign');
 
-    if (input.assets.length > 0) {
-      await tx.insert(campaignAssets).values(
-        input.assets.map((a) => ({
-          campaignId: inserted.id,
-          type: a.type,
-          title: a.title,
-          description: a.description,
-          url: a.url,
-          storagePath: a.storagePath,
-          mimeType: a.mimeType,
-        })),
-      );
-    }
+    await insertAssets(tx, inserted.id, input.assets.map((a, i) => ({ a, sortOrder: i })));
 
     await tx.insert(campaignAudienceSegments).values(
       input.audienceSegmentKeys.map((k) => ({
@@ -211,20 +227,35 @@ export async function updateCampaign(
     await tx.update(campaigns).set(patch).where(eq(campaigns.id, id));
 
     if (input.assets !== undefined) {
-      await tx.delete(campaignAssets).where(eq(campaignAssets.campaignId, id));
-      if (input.assets.length > 0) {
-        await tx.insert(campaignAssets).values(
-          input.assets.map((a) => ({
-            campaignId: id,
-            type: a.type,
-            title: a.title,
-            description: a.description,
-            url: a.url,
-            storagePath: a.storagePath,
-            mimeType: a.mimeType,
-          })),
+      // Keep assets referenced by id (so their stored image bytes and old
+      // runs' thumbnails stay valid), delete the rest, insert new ones.
+      const existing = await tx
+        .select({ id: campaignAssets.id })
+        .from(campaignAssets)
+        .where(eq(campaignAssets.campaignId, id));
+      const existingIds = new Set(existing.map((r) => r.id));
+      const keptIds = input.assets
+        .map((a) => a.id)
+        .filter((x): x is string => !!x && existingIds.has(x));
+      await tx
+        .delete(campaignAssets)
+        .where(
+          keptIds.length > 0
+            ? and(eq(campaignAssets.campaignId, id), notInArray(campaignAssets.id, keptIds))
+            : eq(campaignAssets.campaignId, id),
         );
+      const fresh: Array<{ a: CampaignAssetInput; sortOrder: number }> = [];
+      for (const [i, a] of input.assets.entries()) {
+        if (a.id && existingIds.has(a.id)) {
+          await tx
+            .update(campaignAssets)
+            .set({ title: a.title ?? null, description: a.description ?? null, sortOrder: i })
+            .where(eq(campaignAssets.id, a.id));
+        } else {
+          fresh.push({ a, sortOrder: i });
+        }
       }
+      await insertAssets(tx, id, fresh);
     }
 
     if (input.audienceSegmentKeys !== undefined && segmentMap) {
@@ -243,6 +274,80 @@ export async function updateCampaign(
   });
 
   return getCampaignById(id);
+}
+
+type Tx = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
+
+async function insertAssets(
+  tx: Tx,
+  campaignId: string,
+  items: Array<{ a: CampaignAssetInput; sortOrder: number }>,
+): Promise<void> {
+  for (const { a, sortOrder } of items) {
+    const [row] = await tx
+      .insert(campaignAssets)
+      .values({
+        campaignId,
+        type: a.type,
+        title: a.title,
+        description: a.description,
+        url: a.url,
+        storagePath: a.storagePath,
+        mimeType: a.mimeType,
+        sortOrder,
+      })
+      .returning({ id: campaignAssets.id });
+    if (row && a.dataBase64) {
+      const data = Buffer.from(a.dataBase64, 'base64');
+      await tx.insert(campaignAssetFiles).values({
+        assetId: row.id,
+        mimeType: a.mimeType ?? 'application/octet-stream',
+        byteSize: data.length,
+        data,
+      });
+    }
+  }
+}
+
+/** Stored bytes of one asset (for the image endpoint), or null. */
+export async function getCampaignAssetFile(
+  assetId: string,
+): Promise<{ mimeType: string; byteSize: number; data: Buffer } | null> {
+  const db = getDb();
+  const [row] = await db
+    .select({
+      mimeType: campaignAssetFiles.mimeType,
+      byteSize: campaignAssetFiles.byteSize,
+      data: campaignAssetFiles.data,
+    })
+    .from(campaignAssetFiles)
+    .where(eq(campaignAssetFiles.assetId, assetId));
+  return row ?? null;
+}
+
+/** Image assets of a campaign with their bytes, in "image N" order. */
+export async function listCampaignImages(campaignId: string): Promise<
+  Array<{ assetId: string; title?: string; mimeType: string; data: Buffer | null }>
+> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      assetId: campaignAssets.id,
+      title: campaignAssets.title,
+      assetMime: campaignAssets.mimeType,
+      fileMime: campaignAssetFiles.mimeType,
+      data: campaignAssetFiles.data,
+    })
+    .from(campaignAssets)
+    .leftJoin(campaignAssetFiles, eq(campaignAssetFiles.assetId, campaignAssets.id))
+    .where(and(eq(campaignAssets.campaignId, campaignId), eq(campaignAssets.type, 'image')))
+    .orderBy(...assetOrder);
+  return rows.map((r) => ({
+    assetId: r.assetId,
+    title: r.title ?? undefined,
+    mimeType: r.fileMime ?? r.assetMime ?? 'application/octet-stream',
+    data: r.data ?? null,
+  }));
 }
 
 export async function updateCampaignStatus(

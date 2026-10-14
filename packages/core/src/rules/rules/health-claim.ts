@@ -17,6 +17,7 @@ export const healthClaimRule: Rule = {
   description:
     'Health-related marketing claims must be flagged for evidence review by the Compliance Agent.',
 
+  scansContent: true,
   applicableWhen: (ctx) =>
     HEALTH_CATEGORIES.includes(
       ctx.campaignType as (typeof HEALTH_CATEGORIES)[number],

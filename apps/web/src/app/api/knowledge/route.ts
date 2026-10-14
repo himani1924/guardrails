@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const id = await knowledge.ingestDocument({
+    const { id, status } = await knowledge.ingestDocumentWithStatus({
       title: parsed.data.title,
       sourceType: parsed.data.sourceType,
       category: parsed.data.category,
@@ -74,7 +74,9 @@ export async function POST(req: NextRequest) {
       metadata: { uploadedVia: 'web' },
     });
 
-    return NextResponse.json({ id }, { status: 201 });
+    // 201 for a new document; 200 when an existing one (same title + type) was
+    // left unchanged or updated in place instead of being duplicated.
+    return NextResponse.json({ id, status }, { status: status === 'created' ? 201 : 200 });
   } catch (err) {
     return apiError(err);
   }

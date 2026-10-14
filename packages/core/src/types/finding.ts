@@ -29,5 +29,7 @@ export interface Finding {
   evidence: Evidence[];
   suggestedAction?: string;
   ruleId?: string;
+  /** 1-based image number when the finding comes from a campaign image. */
+  sourceImageIndex?: number;
   createdAt: string;
 }

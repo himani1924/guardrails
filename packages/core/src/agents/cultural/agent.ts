@@ -8,6 +8,12 @@ import { getLogger } from '../../logging';
 import type { CampaignContext } from '../../types/campaign';
 import type { Evidence } from '../../types/evidence';
 import type { Finding } from '../../types/finding';
+import {
+  formatImagesForPrompt,
+  retrievalText,
+  sourceImageField,
+  validImageIndex,
+} from '../../images/extraction';
 
 const log = getLogger({ component: 'agents.cultural' });
 
@@ -23,6 +29,7 @@ const culturalSchema = z.object({
         uncertainty: z.string().max(500).optional(),
         citedSourceIds: z.array(z.string()).max(10).default([]),
         humanReviewRecommended: z.boolean().default(false),
+        sourceImage: sourceImageField,
       }),
     )
     .max(10),
@@ -54,7 +61,7 @@ export async function runCulturalAgent(
   input: CulturalAgentInput,
 ): Promise<CulturalAgentOutput> {
   const chunks = await retrieve({
-    query: `${input.campaign.name} ${input.campaign.festivalContext?.name ?? ''} ${input.campaign.copy}`,
+    query: `${input.campaign.name} ${input.campaign.festivalContext?.name ?? ''} ${retrievalText(input.campaign)}`,
     topK: 4,
     filter: {
       sourceType: ['brand_guideline', 'internal_policy'],
@@ -111,6 +118,7 @@ export async function runCulturalAgent(
       evidenceStatus: ev.length > 0 ? 'SUPPORTED' : 'NOT_FOUND',
       evidence: ev,
       suggestedAction: undefined,
+      sourceImageIndex: validImageIndex(input.campaign, s.sourceImage),
       createdAt: new Date().toISOString(),
     };
   });
@@ -142,7 +150,7 @@ audienceSegments: ${ctx.audienceSegmentKeys.join(', ')}
 CAMPAIGN COPY
 """
 ${ctx.copy}
-"""
+"""${formatImagesForPrompt(ctx)}
 
 AVAILABLE CULTURAL CONTEXT
 ${ev}

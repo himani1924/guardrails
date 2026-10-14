@@ -8,6 +8,7 @@ export const discountFormatRule: Rule = {
   description:
     'Any discount claim must be within 1-100% and, for MVP, must be paired with an offer window.',
 
+  scansContent: true,
   applicableWhen: () => true,
 
   evaluate(ctx, runId) {
@@ -32,7 +33,7 @@ export const discountFormatRule: Rule = {
 
       const hasWindow =
         /this\s+weekend|today\s+only|until\s+\d|ends\s+\d|for\s+a\s+limited\s+time|weekend\s+only/i.test(
-          ctx.copy,
+          ctx.combinedText ?? ctx.copy,
         );
       if (!hasWindow) {
         findings.push(
