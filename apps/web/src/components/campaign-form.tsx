@@ -32,6 +32,37 @@ const PLATFORMS = [
 
 type Segment = types.AudienceSegment;
 
+/** Mirrors the server limits in @guardrail/core campaigns/schemas. */
+const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const MAX_IMAGES = 6;
+
+interface FormImage {
+  key: string;
+  /** Existing asset id (edit mode); its bytes stay on the server. */
+  id?: string;
+  title: string;
+  mimeType: string;
+  byteSize?: number;
+  /** Only for new uploads. Never written to the localStorage draft. */
+  dataBase64?: string;
+  previewUrl: string;
+}
+
+function readAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).replace(/^data:[^,]*,/, ''));
+    r.onerror = () => reject(r.error ?? new Error('Could not read file'));
+    r.readAsDataURL(file);
+  });
+}
+
+function formatBytes(n?: number): string {
+  if (n === undefined) return '';
+  return n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+}
+
 /**
  * Draft persistence (new-campaign form only). Edit forms are not drafted, so a
  * stale local draft can never silently overwrite server data.
@@ -83,10 +114,15 @@ interface CampaignPayload {
   applicablePolicyContext: string[];
   audienceSegmentKeys: string[];
   assets: Array<{
+    id?: string;
     type: 'text' | 'image' | 'video' | 'audio' | 'url';
     title?: string;
     description?: string;
     url?: string;
+    mimeType?: string;
+    dataBase64?: string;
+    hasFile?: boolean;
+    byteSize?: number;
   }>;
 }
 
@@ -131,6 +167,20 @@ export function CampaignForm({
   const [selectedPolicyKeys, setSelectedPolicyKeys] = useState<string[]>(
     initial?.applicablePolicyContext ?? [],
   );
+  const [images, setImages] = useState<FormImage[]>(() =>
+    (initial?.assets ?? [])
+      .filter((a) => a.type === 'image' && a.id && a.hasFile)
+      .map((a) => ({
+        key: a.id!,
+        id: a.id,
+        title: a.title ?? 'image',
+        mimeType: a.mimeType ?? 'image/png',
+        byteSize: a.byteSize,
+        previewUrl: `/api/campaign-assets/${a.id}`,
+      })),
+  );
+  const [imageError, setImageError] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const draftEnabled = mode === 'create';
@@ -220,6 +270,63 @@ export function CampaignForm({
     setDraftRestored(false);
   }
 
+  // One checkbox per policy key: documents sharing a category key (or exact
+  // re-uploads) are grouped, since the key is what the campaign stores.
+  const policyGroups = (() => {
+    const map = new Map<
+      string,
+      { key: string; isCategory: boolean; titles: string[]; sourceTypes: string[]; docCount: number }
+    >();
+    for (const d of knowledgeDocs) {
+      const cat = d.category?.trim();
+      const key = cat || d.id;
+      const g =
+        map.get(key) ?? { key, isCategory: !!cat, titles: [], sourceTypes: [], docCount: 0 };
+      g.docCount += 1;
+      if (!g.titles.includes(d.title)) g.titles.push(d.title);
+      if (!g.sourceTypes.includes(d.sourceType)) g.sourceTypes.push(d.sourceType);
+      map.set(key, g);
+    }
+    return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key));
+  })();
+
+  async function addFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setImageError(null);
+    const problems: string[] = [];
+    const added: FormImage[] = [];
+    for (const file of Array.from(files)) {
+      if (images.length + added.length >= MAX_IMAGES) {
+        problems.push(`At most ${MAX_IMAGES} images per campaign.`);
+        break;
+      }
+      if (!IMAGE_TYPES.includes(file.type)) {
+        problems.push(`${file.name}: only PNG, JPEG or WebP.`);
+        continue;
+      }
+      if (file.size > MAX_IMAGE_BYTES) {
+        problems.push(`${file.name}: larger than 4 MB.`);
+        continue;
+      }
+      try {
+        const dataBase64 = await readAsBase64(file);
+        added.push({
+          key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          title: file.name.slice(0, 200),
+          mimeType: file.type,
+          byteSize: file.size,
+          dataBase64,
+          previewUrl: `data:${file.type};base64,${dataBase64}`,
+        });
+      } catch {
+        problems.push(`${file.name}: could not be read.`);
+      }
+    }
+    if (added.length > 0) setImages((prev) => [...prev, ...added]);
+    if (problems.length > 0) setImageError(problems.join(' '));
+    if (fileInput.current) fileInput.current.value = '';
+  }
+
   const loadPolicies = useCallback(async () => {
     setPoliciesLoading(true);
     try {
@@ -283,17 +390,31 @@ export function CampaignForm({
         ]),
       ),
       audienceSegmentKeys: selectedSegments,
-      // Assets UI hidden: new campaigns send none; edits resend the existing
-      // assets unchanged so saving the form never deletes them.
-      assets:
-        mode === 'edit'
-          ? (initial?.assets ?? []).map((a) => ({
-              type: a.type,
-              ...(a.title ? { title: a.title } : {}),
-              ...(a.description ? { description: a.description } : {}),
-              ...(a.url ? { url: a.url } : {}),
-            }))
-          : [],
+      // Non-image assets (UI hidden) are resent by id so saving never deletes
+      // them; uploaded images are kept by id or sent as new base64 uploads.
+      assets: [
+        ...(mode === 'edit'
+          ? (initial?.assets ?? [])
+              .filter((a) => !(a.type === 'image' && a.hasFile))
+              .map((a) => ({
+                ...(a.id ? { id: a.id } : {}),
+                type: a.type,
+                ...(a.title ? { title: a.title } : {}),
+                ...(a.description ? { description: a.description } : {}),
+                ...(a.url ? { url: a.url } : {}),
+              }))
+          : []),
+        ...images.map((img) =>
+          img.id
+            ? { id: img.id, type: 'image' as const, title: img.title }
+            : {
+                type: 'image' as const,
+                title: img.title,
+                mimeType: img.mimeType,
+                dataBase64: img.dataBase64,
+              },
+        ),
+      ],
     };
 
     try {
@@ -409,7 +530,7 @@ export function CampaignForm({
         <FormSection
           step={2}
           title="Content"
-          description="The copy is what the rules and AI agents analyse."
+          description="The copy and any images are what the rules and AI agents analyse."
         />
         <div className="space-y-5">
         <Field label="Campaign copy">
@@ -425,6 +546,59 @@ export function CampaignForm({
         </Field>
         {/* Hidden for now: "Campaign creative assets (optional — captions, image notes, URLs)"
             textarea bound to assetText. Restore together with the assetText state above. */}
+        <div>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="field-label !mb-0">Images (optional)</span>
+            <span className="text-xs text-ink-subtle">
+              PNG, JPEG or WebP · up to 4 MB each · max {MAX_IMAGES}
+            </span>
+          </div>
+          <p className="mb-3 text-xs text-ink-muted">
+            Text and visuals in each image are extracted and checked along with the copy.
+            {draftEnabled ? ' Images are not saved in the browser draft; re-add them after a reload.' : ''}
+          </p>
+          {images.length > 0 ? (
+            <ul className="mb-3 grid gap-3 sm:grid-cols-3">
+              {images.map((img, i) => (
+                <li key={img.key} className="overflow-hidden rounded-lg border border-line bg-surface-raised">
+                  <img src={img.previewUrl} alt={`Image ${i + 1}: ${img.title}`} className="h-32 w-full bg-canvas object-contain" />
+                  <div className="flex items-center gap-2 px-3 py-2 text-xs">
+                    <span className="shrink-0 rounded bg-brand-500/15 px-1.5 py-0.5 font-medium text-brand-300">Image {i + 1}</span>
+                    <span className="min-w-0 flex-1 truncate text-ink-muted" title={img.title}>
+                      {img.title} {img.byteSize ? `· ${formatBytes(img.byteSize)}` : ''}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setImages((prev) => prev.filter((x) => x.key !== img.key))}
+                      disabled={busy}
+                      className="link shrink-0 text-red-400"
+                      aria-label={`Remove image ${i + 1}`}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <input
+            ref={fileInput}
+            type="file"
+            accept={IMAGE_TYPES.join(',')}
+            multiple
+            className="hidden"
+            onChange={(e) => void addFiles(e.target.files)}
+          />
+          <button
+            type="button"
+            onClick={() => fileInput.current?.click()}
+            disabled={busy || images.length >= MAX_IMAGES}
+            className="btn btn-secondary"
+          >
+            {images.length > 0 ? 'Add more images' : 'Upload images'}
+          </button>
+          {imageError ? <p className="mt-2 text-xs text-red-400" role="alert">{imageError}</p> : null}
+        </div>
         </div>
       </Card>
 
@@ -457,12 +631,12 @@ export function CampaignForm({
             </p>
           ) : (
             <div className="grid max-h-56 gap-2 overflow-y-auto sm:grid-cols-2">
-              {knowledgeDocs.map((d) => {
-                const key = (d.category && d.category.trim()) || d.id;
+              {policyGroups.map((g) => {
+                const key = g.key;
                 const checked = selectedPolicyKeys.includes(key);
                 return (
                   <label
-                    key={d.id}
+                    key={key}
                     className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-sm transition-colors ${
                       checked
                         ? 'border-brand-500 bg-brand-500/10 ring-1 ring-brand-500'
@@ -481,11 +655,17 @@ export function CampaignForm({
                         );
                       }}
                     />
-                    <span>
-                      <span className="block font-medium text-ink">{d.title}</span>
+                    <span className="min-w-0">
+                      <span className="block font-medium text-ink">
+                        {g.titles.length === 1 ? g.titles[0] : g.key}
+                      </span>
+                      {g.titles.length > 1 ? (
+                        <span className="mt-0.5 block text-xs text-ink-muted">{g.titles.join(' · ')}</span>
+                      ) : null}
                       <span className="mt-0.5 block text-xs text-ink-subtle">
-                        {d.sourceType}
-                        {d.category ? ` · ${d.category}` : ''}
+                        {g.sourceTypes.join(', ')}
+                        {g.isCategory ? ` · ${g.key}` : ''}
+                        {g.docCount > 1 ? ` · ${g.docCount} documents` : ''}
                       </span>
                     </span>
                   </label>

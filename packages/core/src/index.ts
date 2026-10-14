@@ -14,3 +14,4 @@ export * as audience from './audience/index';
 export * as analyses from './analyses/index';
 export * as humanReview from './human-review/index';
 export * as feedback from './feedback/index';
+export * as images from './images/index';

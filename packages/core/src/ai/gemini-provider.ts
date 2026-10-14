@@ -122,6 +122,18 @@ function resolveApiKey(explicit?: string): string {
   return apiKey;
 }
 
+/** Prompt text plus inline image parts for vision requests. */
+function geminiParts(
+  prompt: string,
+  req: LLMCompletionRequest,
+): string | Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> {
+  if (!req.images || req.images.length === 0) return prompt;
+  return [
+    { text: prompt },
+    ...req.images.map((img) => ({ inlineData: { mimeType: img.mimeType, data: img.dataBase64 } })),
+  ];
+}
+
 export class GeminiLLMProvider implements LLMProvider {
   readonly name = 'gemini';
   private client: GoogleGenerativeAI;
@@ -147,7 +159,7 @@ export class GeminiLLMProvider implements LLMProvider {
 
     const res = await withRetry(
       'gemini.complete',
-      () => model.generateContent(req.prompt),
+      () => model.generateContent(geminiParts(req.prompt, req)),
       timeoutMs,
     );
 
@@ -193,7 +205,7 @@ export class GeminiLLMProvider implements LLMProvider {
 
         const res = await withRetry(
           'gemini.completeStructured',
-          () => model.generateContent(prompt),
+          () => model.generateContent(geminiParts(prompt, req)),
           timeoutMs,
         );
         const raw = res.response.text();

@@ -6,6 +6,7 @@ import {
   audiencePerspectiveResults,
   evidence,
   findings,
+  imageExtractions,
   recommendations,
   riskAssessments,
 } from '../db/schema';
@@ -14,6 +15,7 @@ import type {
   AudiencePerspectiveResultRow,
   EvidenceRow,
   FindingRow,
+  ImageExtractionRow,
   RecommendationRow,
   RiskAssessmentRow,
 } from '../db/schema';
@@ -22,6 +24,7 @@ import type { AnalysisResult } from '../types/analysis';
 import type { AudiencePerspectiveResult } from '../types/audience';
 import type { Evidence } from '../types/evidence';
 import type { Finding } from '../types/finding';
+import type { ImageExtraction } from '../types/image';
 import type { Recommendation } from '../types/recommendation';
 import type { RiskAssessment } from '../types/risk';
 
@@ -77,9 +80,29 @@ export async function persistAnalysisOutput(input: {
   risks: RiskAssessment[];
   recommendations: Recommendation[];
   perspectives: AudiencePerspectiveResult[];
+  images?: ImageExtraction[];
 }): Promise<void> {
   const db = getDb();
   await db.transaction(async (tx) => {
+    if (input.images && input.images.length > 0) {
+      await tx.insert(imageExtractions).values(
+        input.images.map((x) => ({
+          id: x.id,
+          analysisRunId: input.analysisRunId,
+          assetId: x.assetId,
+          imageIndex: x.imageIndex,
+          title: x.title?.slice(0, 200),
+          mimeType: x.mimeType,
+          status: x.status,
+          extractedText: x.extractedText,
+          description: x.description,
+          detectedElements: x.detectedElements,
+          possibleConcerns: x.possibleConcerns,
+          error: x.error,
+          model: x.model?.slice(0, 100),
+        })),
+      );
+    }
     if (input.findings.length > 0) {
       const findingRows = input.findings.map((f) => ({
         id: f.id,
@@ -97,6 +120,7 @@ export async function persistAnalysisOutput(input: {
         evidenceStatus: f.evidenceStatus,
         suggestedAction: f.suggestedAction,
         ruleId: f.ruleId,
+        sourceImageIndex: f.sourceImageIndex,
       }));
       await tx.insert(findings).values(findingRows);
 
@@ -200,6 +224,7 @@ function toFinding(row: FindingRow, ev: Evidence[]): Finding {
     evidence: ev,
     suggestedAction: row.suggestedAction ?? undefined,
     ruleId: row.ruleId ?? undefined,
+    sourceImageIndex: row.sourceImageIndex ?? undefined,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -250,6 +275,25 @@ function toPerspective(row: AudiencePerspectiveResultRow): AudiencePerspectiveRe
   };
 }
 
+function toImageExtraction(row: ImageExtractionRow): ImageExtraction {
+  return {
+    id: row.id,
+    analysisRunId: row.analysisRunId,
+    assetId: row.assetId ?? undefined,
+    imageIndex: row.imageIndex,
+    title: row.title ?? undefined,
+    mimeType: row.mimeType ?? undefined,
+    status: row.status === 'completed' ? 'completed' : 'failed',
+    extractedText: row.extractedText,
+    description: row.description,
+    detectedElements: row.detectedElements,
+    possibleConcerns: row.possibleConcerns,
+    error: row.error ?? undefined,
+    model: row.model ?? undefined,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
 function toAnalysisResult(
   runRow: AnalysisRunRow,
   findingRows: FindingRow[],
@@ -257,6 +301,7 @@ function toAnalysisResult(
   riskRows: RiskAssessmentRow[],
   recRows: RecommendationRow[],
   perspectiveRows: AudiencePerspectiveResultRow[],
+  imageRows: ImageExtractionRow[] = [],
 ): AnalysisResult {
   const evidenceByFinding = new Map<string, Evidence[]>();
   for (const e of evidenceRows) {
@@ -276,6 +321,7 @@ function toAnalysisResult(
     risks: riskRows.map(toRisk),
     recommendations: recRows.map(toRecommendation),
     audiencePerspectives: perspectiveRows.map(toPerspective),
+    images: imageRows.map(toImageExtraction),
     totalPromptTokens: runRow.totalPromptTokens ?? undefined,
     totalCompletionTokens: runRow.totalCompletionTokens ?? undefined,
     latencyMs: runRow.latencyMs ?? undefined,
@@ -304,11 +350,16 @@ export async function getLatestAnalysisRunForCampaign(
 
 async function getAnalysisRunUsing(run: AnalysisRunRow): Promise<AnalysisResult> {
   const db = getDb();
-  const [findingRows, riskRows, recRows, perspectiveRows] = await Promise.all([
+  const [findingRows, riskRows, recRows, perspectiveRows, imageRows] = await Promise.all([
     db.select().from(findings).where(eq(findings.analysisRunId, run.id)).orderBy(asc(findings.createdAt)),
     db.select().from(riskAssessments).where(eq(riskAssessments.analysisRunId, run.id)),
     db.select().from(recommendations).where(eq(recommendations.analysisRunId, run.id)),
     db.select().from(audiencePerspectiveResults).where(eq(audiencePerspectiveResults.analysisRunId, run.id)),
+    db
+      .select()
+      .from(imageExtractions)
+      .where(eq(imageExtractions.analysisRunId, run.id))
+      .orderBy(asc(imageExtractions.imageIndex)),
   ]);
   const findingIds = findingRows.map((f) => f.id);
   const evidenceRows = findingIds.length
@@ -317,7 +368,7 @@ async function getAnalysisRunUsing(run: AnalysisRunRow): Promise<AnalysisResult>
         .from(evidence)
         .where(inArrayNonEmpty(evidence.findingId, findingIds))
     : [];
-  return toAnalysisResult(run, findingRows, evidenceRows, riskRows, recRows, perspectiveRows);
+  return toAnalysisResult(run, findingRows, evidenceRows, riskRows, recRows, perspectiveRows, imageRows);
 }
 
 // Local helper — avoids optional import cycle with drizzle's `inArray`.

@@ -6,9 +6,18 @@ import type { ZodType, ZodTypeDef } from 'zod';
  * interfaces.
  */
 
+/** An image attached to a request (multimodal providers only). */
+export interface LLMImageInput {
+  mimeType: string;
+  /** Raw bytes, base64-encoded (no data: prefix). */
+  dataBase64: string;
+}
+
 export interface LLMCompletionRequest {
   system?: string;
   prompt: string;
+  /** Images sent alongside the prompt (OpenAI / Gemini vision). */
+  images?: LLMImageInput[];
   temperature?: number;
   maxOutputTokens?: number;
   timeoutMs?: number;

@@ -75,6 +75,22 @@ function wrap(err: unknown): Error {
   return new AIProviderError('Unknown AI provider error');
 }
 
+/** Text-only prompt, or text + image parts for vision requests. */
+function userContent(
+  req: LLMCompletionRequest,
+): string | OpenAI.Chat.Completions.ChatCompletionContentPart[] {
+  if (!req.images || req.images.length === 0) return req.prompt;
+  return [
+    { type: 'text', text: req.prompt },
+    ...req.images.map(
+      (img): OpenAI.Chat.Completions.ChatCompletionContentPart => ({
+        type: 'image_url',
+        image_url: { url: `data:${img.mimeType};base64,${img.dataBase64}` },
+      }),
+    ),
+  ];
+}
+
 export class OpenAILLMProvider implements LLMProvider {
   readonly name = 'openai';
   private client: OpenAI;
@@ -104,7 +120,7 @@ export class OpenAILLMProvider implements LLMProvider {
           max_tokens: req.maxOutputTokens,
           messages: [
             ...(req.system ? [{ role: 'system' as const, content: req.system }] : []),
-            { role: 'user' as const, content: req.prompt },
+            { role: 'user' as const, content: userContent(req) },
           ],
         }),
       timeoutMs,
@@ -141,7 +157,7 @@ export class OpenAILLMProvider implements LLMProvider {
               response_format: { type: 'json_object' },
               messages: [
                 { role: 'system' as const, content: systemBase + jsonInstruction },
-                { role: 'user' as const, content: req.prompt },
+                { role: 'user' as const, content: userContent(req) },
               ],
             }),
           timeoutMs,

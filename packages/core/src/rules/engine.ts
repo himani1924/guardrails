@@ -49,5 +49,31 @@ export function runRuleEngine(
     }
   }
 
+  // Second pass: content-scanning rules over each image's extracted text.
+  for (const img of ctx.images ?? []) {
+    const text = img.status === 'completed' ? img.extractedText.trim() : '';
+    if (!text) continue;
+    const imageCtx: CampaignContext = { ...ctx, copy: text };
+    for (const rule of rules) {
+      if (!rule.scansContent || !rule.applicableWhen(imageCtx)) continue;
+      try {
+        for (const f of rule.evaluate(imageCtx, analysisRunId)) {
+          findings.push(labelImageFinding(f, img.imageIndex));
+        }
+      } catch (err) {
+        log.error({ err, ruleId: rule.id, imageIndex: img.imageIndex }, 'rule_failed');
+      }
+    }
+  }
+
   return { findings, evaluatedRuleIds, skippedRuleIds };
+}
+
+function labelImageFinding(f: Finding, imageIndex: number): Finding {
+  return {
+    ...f,
+    title: `[Image ${imageIndex}] ${f.title}`,
+    explanation: `Text extracted from image ${imageIndex}: ${f.explanation.replace(/^The copy contains/, 'The image contains')}`,
+    sourceImageIndex: imageIndex,
+  };
 }

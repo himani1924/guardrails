@@ -6,6 +6,11 @@ import { getLLMProvider } from '../../ai';
 import { getLogger } from '../../logging';
 import type { CampaignContext } from '../../types/campaign';
 import type { Finding } from '../../types/finding';
+import {
+  formatImagesForPrompt,
+  sourceImageField,
+  validImageIndex,
+} from '../../images/extraction';
 
 const log = getLogger({ component: 'agents.sentiment' });
 
@@ -22,6 +27,7 @@ const sentimentSchema = z.object({
         affectedContent: z.string().max(1000).optional(),
         confidence: z.number().min(0).max(1),
         uncertainty: z.string().max(500).optional(),
+        sourceImage: sourceImageField,
       }),
     )
     .max(10),
@@ -79,6 +85,7 @@ export async function runSentimentAgent(
     evidenceStatus: 'NOT_APPLICABLE',
     evidence: [],
     suggestedAction: undefined,
+    sourceImageIndex: validImageIndex(input.campaign, s.sourceImage),
     createdAt: new Date().toISOString(),
   }));
 
@@ -97,7 +104,7 @@ audienceSegments: ${ctx.audienceSegmentKeys.join(', ')}
 CAMPAIGN COPY
 """
 ${ctx.copy}
-"""
+"""${formatImagesForPrompt(ctx)}
 
 Return JSON matching schema SentimentAnalysis. Frame risk signals as potential reactions, not certainties.`;
 }

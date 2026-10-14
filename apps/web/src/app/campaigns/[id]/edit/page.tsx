@@ -40,6 +40,10 @@ export default async function EditCampaignPage(
           audienceSegmentKeys: existing.audienceSegmentIds,
           applicablePolicyContext: existing.applicablePolicyContext ?? [],
           assets: existing.assets?.map((a) => ({
+            id: a.id,
+            mimeType: a.mimeType,
+            hasFile: a.hasFile,
+            byteSize: a.byteSize,
             type: a.type === 'image' || a.type === 'video' || a.type === 'audio' || a.type === 'url' ? a.type : 'text',
             title: a.title,
             description: a.description,

@@ -59,6 +59,8 @@ export default async function AnalysisPage(
     SEVERITY_ORDER.indexOf(f.severity) - SEVERITY_ORDER.indexOf(g.severity);
   const ruleFindings = result.findings.filter((f) => f.producedBy === 'rule_engine').sort(bySeverity);
   const agentFindings = result.findings.filter((f) => f.producedBy !== 'rule_engine').sort(bySeverity);
+  const images = result.images ?? [];
+  const failedImages = images.filter((x) => x.status === 'failed');
   const sevCount = (s: types.Severity) => result.findings.filter((f) => f.severity === s).length;
 
   return (
@@ -87,6 +89,15 @@ export default async function AnalysisPage(
         These are AI-assisted risk signals and simulated audience perspectives, not factual
         predictions of public reaction. A human reviewer makes the final decision.
       </Alert>
+
+      {failedImages.length > 0 ? (
+        <div className="mt-4">
+          <Alert tone="error" title="Image extraction failed">
+            {failedImages.map((x) => `Image ${x.imageIndex}`).join(', ')} could not be analysed, so
+            {failedImages.length === 1 ? ' its' : ' their'} content was not checked. Review manually or re-run the analysis.
+          </Alert>
+        </div>
+      ) : null}
 
       {/* Summary strip */}
       <Card className="mt-6">
@@ -138,6 +149,26 @@ export default async function AnalysisPage(
           ))}
         </div>
       )}
+
+      {images.length > 0 ? (
+        <>
+          <SectionHeading
+            eyebrow="Creative"
+            title="Images"
+            description="Text and content extracted from each image by the vision model, and the findings tied to it."
+            actions={<Tag tone="brand">{images.length}</Tag>}
+          />
+          <div className="space-y-4">
+            {images.map((img) => (
+              <ImagePanel
+                key={img.id}
+                image={img}
+                findings={result.findings.filter((f) => f.sourceImageIndex === img.imageIndex).sort(bySeverity)}
+              />
+            ))}
+          </div>
+        </>
+      ) : null}
 
       <SectionHeading
         eyebrow="Deterministic layer"
@@ -253,6 +284,94 @@ export default async function AnalysisPage(
         </div>
       )}
     </AppShell>
+  );
+}
+
+function ImagePanel({ image: img, findings }: { image: types.ImageExtraction; findings: types.Finding[] }) {
+  const el = img.detectedElements;
+  const groups: Array<[string, string[]]> = [
+    ['Claims', el.claims],
+    ['Badges', el.badges],
+    ['Text overlays', el.textOverlays],
+    ['Products', el.products],
+    ['Logos', el.logos],
+    ['People', el.people],
+  ];
+  return (
+    <Card>
+      <div className="grid gap-5 md:grid-cols-[220px_1fr]">
+        <div>
+          {img.assetId ? (
+            <a href={`/api/campaign-assets/${img.assetId}`} target="_blank" rel="noopener noreferrer">
+              <img
+                src={`/api/campaign-assets/${img.assetId}`}
+                alt={`Image ${img.imageIndex}${img.title ? `: ${img.title}` : ''}`}
+                className="h-44 w-full rounded-lg border border-line bg-canvas object-contain"
+              />
+            </a>
+          ) : (
+            <div className="flex h-44 items-center justify-center rounded-lg border border-dashed border-line text-xs text-ink-subtle">
+              Image no longer attached
+            </div>
+          )}
+        </div>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Tag tone="brand">Image {img.imageIndex}</Tag>
+            {img.title ? <span className="truncate text-sm font-medium text-ink">{img.title}</span> : null}
+            {img.status === 'failed' ? (
+              <Tag tone="amber">Extraction failed</Tag>
+            ) : (
+              <Tag tone="emerald">Extracted</Tag>
+            )}
+            {findings.length > 0 ? <Tag>{findings.length} finding{findings.length === 1 ? '' : 's'}</Tag> : null}
+          </div>
+          {img.status === 'failed' ? (
+            <p className="mt-3 text-sm text-ink-muted">
+              The image could not be analysed: <span className="text-ink">{img.error ?? 'unknown error'}</span>
+            </p>
+          ) : (
+            <>
+              <p className="mt-3 text-sm leading-relaxed text-ink-muted">{img.description}</p>
+              <p className="eyebrow mt-4">Extracted text</p>
+              {img.extractedText.trim() ? (
+                <pre className="mt-1 whitespace-pre-wrap rounded-lg border border-line bg-surface-raised p-3 font-mono text-xs text-ink">
+                  {img.extractedText}
+                </pre>
+              ) : (
+                <p className="mt-1 text-xs text-ink-subtle">No text detected.</p>
+              )}
+              <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
+                {groups
+                  .filter(([, v]) => v.length > 0)
+                  .map(([label, v]) => (
+                    <div key={label} className="min-w-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">{label}</p>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {v.map((s, i) => (
+                          <Tag key={i}>{s}</Tag>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+              {img.possibleConcerns.length > 0 ? (
+                <div className="mt-3">
+                  <SignalList title="Possible concerns" items={img.possibleConcerns} tone="amber" />
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
+      </div>
+      {findings.length > 0 ? (
+        <div className="mt-5 space-y-3 border-t border-line pt-4">
+          {findings.map((f) => (
+            <FindingCard key={f.id} finding={f} showEvidence={false} />
+          ))}
+        </div>
+      ) : null}
+    </Card>
   );
 }
 

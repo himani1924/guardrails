@@ -8,6 +8,7 @@ import { getLogger } from '../../logging';
 import type { AudiencePerspectiveResult, AudienceSegment } from '../../types/audience';
 import type { CampaignContext } from '../../types/campaign';
 import type { Finding } from '../../types/finding';
+import { formatImagesForPrompt } from '../../images/extraction';
 
 const log = getLogger({ component: 'agents.audience' });
 
@@ -132,7 +133,7 @@ festivalContext: ${ctx.festivalContext ? ctx.festivalContext.name : 'none'}
 CAMPAIGN COPY
 """
 ${ctx.copy}
-"""
+"""${formatImagesForPrompt(ctx, { sourceImageHint: false })}
 
 CONFIGURED AUDIENCE PERSPECTIVES
 ${segmentText}

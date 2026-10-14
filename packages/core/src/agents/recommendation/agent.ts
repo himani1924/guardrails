@@ -7,6 +7,7 @@ import { getLogger } from '../../logging';
 import { RECOMMENDATION_ACTIONS } from '../../types/enums';
 import type { CampaignContext } from '../../types/campaign';
 import type { Finding } from '../../types/finding';
+import { formatImagesForPrompt } from '../../images/extraction';
 import type { Recommendation } from '../../types/recommendation';
 
 const log = getLogger({ component: 'agents.recommendation' });
@@ -83,13 +84,13 @@ function buildPrompt(ctx: CampaignContext, findings: Finding[]): string {
   const findingText = findings
     .map(
       (f) =>
-        `- findingId: ${f.id}\n  category: ${f.category}\n  severity: ${f.severity}\n  title: ${f.title}\n  explanation: ${f.explanation}\n  affectedContent: ${f.affectedContent ?? '(none)'}\n  evidenceStatus: ${f.evidenceStatus}`,
+        `- findingId: ${f.id}\n  category: ${f.category}\n  severity: ${f.severity}\n  title: ${f.title}\n  explanation: ${f.explanation}\n  affectedContent: ${f.affectedContent ?? '(none)'}\n  evidenceStatus: ${f.evidenceStatus}${f.sourceImageIndex ? `\n  source: image ${f.sourceImageIndex}` : ''}`,
     )
     .join('\n\n');
   return `CAMPAIGN COPY
 """
 ${ctx.copy}
-"""
+"""${formatImagesForPrompt(ctx, { sourceImageHint: false })}
 
 FINDINGS
 ${findingText}

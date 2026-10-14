@@ -96,6 +96,9 @@ export class MockLLMProvider implements LLMProvider {
       const matched = this.matchers.find((m) => m.match(req));
       candidate = matched?.response;
     }
+    if (candidate === undefined && req.schemaName === 'ImageExtraction') {
+      candidate = mockImageExtraction(req);
+    }
     if (candidate === undefined) {
       candidate = defaultForSchema(req.schema, req.schemaName);
     }
@@ -117,6 +120,30 @@ export class MockLLMProvider implements LLMProvider {
       latencyMs: 0,
     };
   }
+}
+
+/**
+ * Deterministic stand-in for a vision call. The mock cannot read pixels, so
+ * it echoes `metadata.mockExtractedText` (if a test/demo provides it) and
+ * says plainly that no real vision model was used.
+ */
+export function mockImageExtraction(req: LLMCompletionRequest): unknown {
+  const meta = req.metadata ?? {};
+  const title = typeof meta.imageTitle === 'string' ? meta.imageTitle : 'image';
+  const text = typeof meta.mockExtractedText === 'string' ? meta.mockExtractedText : '';
+  return {
+    extractedText: text,
+    description: `Mock extraction for "${title}" (mock provider: no real vision model, pixels not read).`,
+    detectedElements: {
+      people: [],
+      products: [],
+      logos: [],
+      textOverlays: text ? [text] : [],
+      claims: [],
+      badges: [],
+    },
+    possibleConcerns: [],
+  };
 }
 
 function countTokens(text: string | undefined): number {

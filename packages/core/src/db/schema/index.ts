@@ -10,3 +10,4 @@ export * from './audit';
 export * from './knowledge';
 export * from './feedback';
 export * from './audience-perspective';
+export * from './image-extractions';

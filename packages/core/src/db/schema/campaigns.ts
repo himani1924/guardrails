@@ -1,5 +1,7 @@
 import {
+  customType,
   index,
+  integer,
   jsonb,
   pgTable,
   text,
@@ -58,12 +60,38 @@ export const campaignAssets = pgTable(
     url: text('url'),
     storagePath: text('storage_path'),
     mimeType: varchar('mime_type', { length: 100 }),
+    /** Display / analysis order within the campaign (image N = Nth image by this order). */
+    sortOrder: integer('sort_order').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('campaign_assets_campaign_id_idx').on(t.campaignId)],
 );
 
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return 'bytea';
+  },
+});
+
+/**
+ * Binary content of uploaded campaign images, 1:1 with campaign_assets.
+ * Kept in Postgres (bytea) rather than on disk so it is transactional with the
+ * asset row, removed by ON DELETE CASCADE, included in pg_dump backups, and
+ * needs no shared upload directory between the Next.js server and the CLIs.
+ * Kept in its own table so normal asset queries never load the bytes.
+ */
+export const campaignAssetFiles = pgTable('campaign_asset_files', {
+  assetId: uuid('asset_id')
+    .primaryKey()
+    .references(() => campaignAssets.id, { onDelete: 'cascade' }),
+  mimeType: varchar('mime_type', { length: 100 }).notNull(),
+  byteSize: integer('byte_size').notNull(),
+  data: bytea('data').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type CampaignRow = typeof campaigns.$inferSelect;
 export type NewCampaignRow = typeof campaigns.$inferInsert;
 export type CampaignAssetRow = typeof campaignAssets.$inferSelect;
 export type NewCampaignAssetRow = typeof campaignAssets.$inferInsert;
+export type CampaignAssetFileRow = typeof campaignAssetFiles.$inferSelect;

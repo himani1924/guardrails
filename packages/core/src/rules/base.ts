@@ -11,6 +11,12 @@ export interface Rule {
   readonly id: string;
   readonly name: string;
   readonly description: string;
+  /**
+   * True for rules that look for something PRESENT in text (claims, discount
+   * figures). The engine re-runs these over each image's OCR text and labels
+   * the findings with the source image.
+   */
+  readonly scansContent?: boolean;
   applicableWhen(ctx: CampaignContext): boolean;
   evaluate(ctx: CampaignContext, analysisRunId: string): Finding[];
 }

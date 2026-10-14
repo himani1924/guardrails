@@ -1,6 +1,7 @@
 import type { AnalysisRunStatus } from './enums';
 import type { AudiencePerspectiveResult } from './audience';
 import type { Finding } from './finding';
+import type { ImageExtraction } from './image';
 import type { Recommendation } from './recommendation';
 import type { RiskAssessment } from './risk';
 
@@ -20,6 +21,8 @@ export interface AnalysisResult {
   risks: RiskAssessment[];
   recommendations: Recommendation[];
   audiencePerspectives: AudiencePerspectiveResult[];
+  /** Image-extraction results for this run, ordered by image number. */
+  images: ImageExtraction[];
   totalPromptTokens?: number;
   totalCompletionTokens?: number;
   totalCostUsd?: number;
