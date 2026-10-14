@@ -18,7 +18,7 @@ guardRails/
     web/        # Next.js 15 App Router UI + REST API (Route Handlers)
   packages/
     core/       # Domain, rules, agents, RAG (pgvector), DB (Drizzle), AI providers
-      drizzle/  # SQL migrations (0000, 0001, 0002_pgvector)
+      drizzle/  # SQL migrations (0000, 0001, 0002_pgvector, 0003_images)
   docker-compose.yml  # Postgres 16 + pgvector (pgvector/pgvector:pg16)
   scripts/            # One-off DB bootstrap SQL (create-db.sql)
 ```
@@ -27,7 +27,8 @@ guardRails/
 
 `POST /api/campaigns/:id/analyze` → `packages/core/src/analyses/orchestrator.ts` runs these steps in order:
 
-1. **Rule engine.** 6 deterministic rules: disclaimer, discount format, influencer `#ad`, health claims, festival line, metadata.
+0. **Image extraction.** For each uploaded campaign image, one vision call (Gemini/OpenAI; the mock returns a fixed fixture) returns Zod-validated `{extractedText, description, detectedElements, possibleConcerns}`, saved per run in `image_extractions`. A failed image is marked `failed` and adds a high-severity, human-review finding.
+1. **Rule engine.** 6 deterministic rules: disclaimer, discount format, influencer `#ad`, health claims, festival line, metadata. They run over the copy plus image text: claim and discount rules also run on each image's text (findings titled `[Image N]`), and "missing marker" rules accept a marker found in an image.
 2. **Compliance agent.** Retrieves the top 6 chunks from internal_policy, brand_guideline, approved_claim and regulatory docs.
 3. **Sentiment agent.**
 4. **Cultural agent.** Runs only when a festival is set. Retrieves the top 4 chunks from brand_guideline and internal_policy docs.
@@ -36,7 +37,36 @@ guardRails/
 7. **Recommendation agent.** Followed by a deterministic gap-fill.
 8. **Persist and audit.** Everything is written in one transaction; the campaign moves to `in_review` or `analyzed`.
 
-Agents may only cite retrieved sources. Unknown citations are dropped.
+Agents may only cite retrieved sources. Unknown citations are dropped. All five agents (compliance, sentiment, cultural, audience, recommendation) receive each image's extracted text and description. Compliance, sentiment and cultural findings may name a `sourceImage`; it is kept only if that image number exists. Retrieval queries include image text.
+
+### Images
+
+- **Upload:** the campaign form (new and edit) accepts PNG, JPEG or WebP, **max 4 MB each and 6 per campaign**, with previews and a remove button. The same limits are enforced by the API (`campaigns/schemas.ts`: `IMAGE_MIME_TYPES`, `MAX_IMAGE_BYTES`, `MAX_IMAGES_PER_CAMPAIGN`). Over the API, send an asset `{type:"image", title, mimeType, dataBase64}`.
+- **Storage:** bytes live in Postgres (`campaign_asset_files`, bytea, 1:1 with `campaign_assets`, `ON DELETE CASCADE`), so they are transactional, deleted with the campaign and included in `pg_dump`. `campaign_assets.sort_order` defines "image N". Editing a campaign keeps assets sent back by `id`, so old runs' thumbnails stay valid.
+- **Serving:** `GET /api/campaign-assets/:id` returns the stored image.
+- **Which images are analysed:** only images with stored bytes. Older URL-only "reference" image assets (as in `db:seed`) are skipped.
+- **Model:** vision uses the active `LLM_PROVIDER` and its `*_LLM_MODEL`, which must be multimodal. There is no separate vision-model setting. The mock returns a fixed description and empty text.
+- **Results:** the analysis page has an **Images** section with thumbnail, status, extracted text, description, detected elements, possible concerns and the findings tied to that image. Finding cards show an `Image N` tag. A failed extraction shows an error banner.
+- **Draft:** images are not stored in the browser draft (see below).
+
+### Database tables added by migration 0003 (`0003_images.sql`)
+
+| Table / column | Purpose |
+| --- | --- |
+| `campaign_asset_files` | image bytes, mime type, byte size per asset |
+| `image_extractions` | per run and image: status, extracted text, description, detected elements, concerns, error, model |
+| `campaign_assets.sort_order` | image order ("image N") |
+| `findings.source_image_index` | image a finding came from |
+
+Run `npm run db:migrate` after pulling. It only adds tables and columns.
+
+### Web app
+
+- **Dark UI only.** There is no light theme.
+- **Campaign form** (`/campaigns/new`, `/campaigns/:id/edit`): basics, copy, image upload, policy checkboxes, extra policy keys and audience segments. The free-text "creative assets" field is hidden; editing a campaign resends existing non-image assets unchanged.
+- **Draft autosave (new campaigns only):** fields are saved to `localStorage` (`guardrail:new-campaign-draft:v1`) after 500 ms and restored on reload; **Clear draft** resets it; the draft is cleared after a successful create. Images are deliberately not saved in the draft, so re-add them after a reload. Edit forms are never drafted.
+- **Policies in the form:** one checkbox per policy key (a document's category key, or its id when it has none). Documents sharing a key are grouped under one checkbox with their titles and count. **Upload policy in new tab ↗** opens `/knowledge`; the list reloads when you return to the tab, or via **Refresh policies**.
+- **Knowledge upload** (`/knowledge`, `POST /api/knowledge`): `.txt`/`.md` or pasted text (20–200,000 characters) with title, source type, category key and geography. Uploads are de-duplicated by **title + source type**: identical content returns `200 {"status":"unchanged"}` and adds nothing; different content updates that document in place and re-embeds it (`"updated"`); otherwise `201 {"status":"created"}`. `npm run db:ingest` uses the same logic, so re-running it no longer creates copies.
 
 ## Requirements
 
@@ -73,6 +103,8 @@ npm run verify
 npm run dev             # http://localhost:3000, health probe: GET /api/health
 ```
 
+**Port 3000 tip:** if another dev server (for example Vite) is bound to `[::1]:3000`, `localhost:3000` may reach that app instead of Guardrail. Use `http://127.0.0.1:3000`, or stop the other server. Check with `lsof -nP -iTCP:3000 -sTCP:LISTEN`.
+
 ## Scripts
 
 | Command | What it does |
@@ -87,7 +119,7 @@ npm run dev             # http://localhost:3000, health probe: GET /api/health
 | `npm run db:generate` | Generate SQL migrations from the Drizzle schema |
 | `npm run db:migrate` | Apply migrations (enables pgvector) |
 | `npm run db:seed` | Wipe + reinsert demo campaigns and audience segments |
-| `npm run db:ingest` | Ingest the fictional demo knowledge base (re-running duplicates documents) |
+| `npm run db:ingest` | Ingest the fictional demo knowledge base (de-duplicated by title + source type) |
 | `npm run db:reembed` | Re-embed all existing chunks into pgvector (backfill / provider switch) |
 | `npm run db:studio` | Drizzle Studio |
 | `npm run evaluate` | Run the evaluation harness (4 seeded demo campaigns) |
@@ -135,6 +167,7 @@ Knowledge chunks are stored in `knowledge_chunks.embedding vector(768)` with an 
   - risk aggregator (5)
   - mock LLM provider (5)
   - retrieval helpers (5): SQL filter builder, dimension guard, model id
+  - image extraction (9): schema validation, mock fixture, failed image handling, rules over image text, image-citation check
 - **Integration test:** `packages/core/src/knowledge/retriever.integration.test.ts` runs real pgvector retrieval. It is skipped unless `TEST_DATABASE_URL` points at a migrated database:
   ```bash
   TEST_DATABASE_URL=postgres://guardrail:guardrail@localhost:5432/guardrail npm test
@@ -147,16 +180,19 @@ Knowledge chunks are stored in `knowledge_chunks.embedding vector(768)` with an 
 
 ## Current status and known gaps
 
-This is a working MVP for text campaigns: create → analyze → findings → review → approve, with an append-only audit log in the database.
+This is a working MVP for text and image campaigns: create → analyze → findings → review → approve, with an append-only audit log in the database.
 
 **Recent changes:**
 - Removed leftover debug telemetry calls and unused code/dependencies (`@typescript-eslint/eslint-plugin`, `@typescript-eslint/parser`, `@vitest/coverage-v8`).
 - Moved retrieval to pgvector.
+- Dark-only UI redesign, hidden assets text field, draft autosave and in-form policy refresh (commit f2f5137).
+- Image upload, vision extraction and image-aware rules and agents (migration 0003).
+- Knowledge ingestion de-duplicated; policy checkboxes grouped by key.
 
 **Not yet built:**
 - authentication and roles (the reviewer is the `DEFAULT_REVIEWER_ID` env identity);
 - campaign versioning and comparison;
-- image upload and multimodal review (assets are stored as metadata only and are not read by agents);
+- video/audio analysis and image review for URL-only assets;
 - claim extraction and claim-level evidence validation;
 - rules as data;
 - a UI or API for the audit log or for creating audience segments;
@@ -165,4 +201,5 @@ This is a working MVP for text campaigns: create → analyze → findings → re
 **Known quirks:**
 - The aggregator's evidence dimension ignores `CONTRADICTED`.
 - `analysis_runs.model` is recorded as `openai-configured` even for Gemini, and token columns are not populated.
-- A single failing agent fails the whole run.
+- A single failing agent fails the whole run (a failing image does not: it is marked failed and flagged for review).
+- Documents ingested more than once before de-duplication remain in the database until removed manually.
